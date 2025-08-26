@@ -1,0 +1,300 @@
+---
+title: "Lab Task 4: Approx. Regression w/ Piecewise Polynomial Model"
+author: "Group 6"
+date: Sys.Date()
+output:
+  html_document:
+    code_folding: show
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+Group members:
+
+- Shawn Yakir , 315714980, shawnyakir@gmail.com
+- Sarah Levitz, 324673623, sarah.levitz@mail.huji.ac.il
+- Carmel Baris, 318455276, carmel.baris@mail.huji.ac.il 
+
+
+# Libraries
+
+```{r library, message=FALSE, warning=FALSE}
+library(segmented)
+library(data.table)
+library(caret)  # For creating training and testing sets
+
+```
+
+# Setting up environment & paths
+```{r setup}
+## ------------------------------------------------
+## ---- DEPENDENCIES AKA FILES REQUIRED
+## Make sure that all files are in the current working directory:
+## 1. chr1_bases.rda
+## 2. TCGA-13-0723-01A_lib2_all_chr1.forward
+## 3. helpers_file
+## 
+## Note that in this lecture we'll create and save a new file:
+## 4. reads_gc_5K.rda
+
+
+## ------------------------------------------------
+## ---- CLEAN ENVIRONMENT
+rm(list = ls())
+
+
+## ---- SET WORKING DIRECTORY
+dir_name = "~/Carmel/RProjects/Lab_Benjamini/data/"
+# dir_name = "/Users/alevi/Downloads/"
+# setwd(dir_name)
+# getwd() # validate
+
+
+## ------------------------------------------------
+## ---- LOAD HELPER FUNCTIONS
+helpers_file = file.path(dir_name, "help_funcs.R")
+source(helpers_file)
+helpers <- list(
+    loadRData = loadRData,
+    fitMet = fitMetrics,
+    rmvOut = removeOutliersPaired,
+    binBases = binBases)
+
+```
+
+# Loading data files 
+
+```{r warning=FALSE}
+
+## ------------------------------------------------
+## ---- LOAD FILE OF NUCLEO_BASES (A,T,C,G)
+bases_file = file.path(dir_name, "chr1_line.rda")
+chr1_bases = helpers$loadRData(bases_file) # like Lecture1
+
+
+## ------------------------------------------------
+## ---- LOAD FILE OF READS LOCATIONS (THAT START A FRAGMENT)
+  
+reads_file_all = file.path(dir_name,"TCGA-13-0723-01A_lib2_all_chr1.forward")
+chr1_reads = data.table::fread(reads_file_all) #like Lecture2
+colnames(chr1_reads) = c("Chrom","Loc","FragLen")   
+
+
+```
+
+
+# Preprocessing data 
+
+```{r, prep, include=FALSE}
+
+## chunk should not have eval = FALSE!!
+## o/w it messes up GC_5K
+
+nreads = nrow(chr1_reads)
+myLocations = as.numeric(chr1_reads$Loc)
+last_read = myLocations[nreads]
+
+binsize = 5000
+
+## ------------------------------------------------
+## ---- BINNING NUCLEO_BASES DATA
+##
+# per bin, count occurrences of each letter
+bases_5K = binBases(chr1_bases, last_read, binsize) 
+
+# per bin, sum occurrence counts of C & G only (GC content)
+GC_5K <<- bases_5K[, 3] + bases_5K[, 4] #store as global variable
+
+# convert GC_5K into percentages
+if(any(GC_5K>1)){ # This makes sure I don't repeat the command
+  GC_5K = GC_5K / binsize
+}
+
+## ------------------------------------------------
+## ---- BINNING READS COVERAGE DATA
+
+# per bin, calculate reads coverage 
+reads_5K = binReads(myLocations,binsize,last_read)
+save(reads_5K, GC_5K,file = file.path(dir_path=dir_name,"reads_gc_5K.rda"))
+
+
+## ------------------------------------------------
+## ---- CLEARING UP ENV
+rm("chr1_bases","chr1_reads") # remove from memory
+
+# load data
+reads_file_5K = file.path(dir_name, "reads_gc_5K.rda")
+reads_gc_5K = helpers$loadRData(reads_file_5K)
+# access using `$`:
+#   GC_5K = reads_gc_5K$GC_5K
+#   reads_5K = reads_gc_5K$reads_5K
+
+
+```
+
+
+
+# Remove outliers
+
+```{r}
+# Remove outliers from reads and GC content data
+cleaned_data = helpers$rmvOut(GC_5K, reads_5K)
+GC_5K_clean = cleaned_data$x
+reads_5K_clean = cleaned_data$y
+
+```
+
+# Splitting Data to Test and Train
+```{r train_test}
+set.seed(123)
+
+# Create training and testing sets
+train_index = createDataPartition(GC_5K_clean, p = 0.8, list = FALSE)
+GC_5K_train = GC_5K_clean[train_index]
+reads_5K_train = reads_5K_clean[train_index]
+GC_5K_test = GC_5K_clean[-train_index]
+reads_5K_test = reads_5K_clean[-train_index]
+```
+
+# Question 1: Segmented regression
+
+
+```{r pw_regression}
+
+# Fit initial linear model
+initial_model = lm(reads_5K_clean ~ GC_5K_clean)
+# Using `segmented` package for piecewise regression
+seg_model = segmented(initial_model, seg.Z = ~GC_5K_clean, npsi = 2)
+
+# Extract breakpoints
+breakpoints = seg_model$psi[, "Est."]
+knot1 = breakpoints[[1]]
+knot2 = breakpoints[[2]]
+
+# Plot piecewise polynomial regression
+plot(GC_5K_clean, reads_5K_clean, pch = 16, cex = 0.5, col = rgb(0,0,0,0.5), 
+     xlab = "GC Content (cleaned)", ylab = "Read Counts (cleaned)",
+     main = "Piecewise Polynomial Regression")
+plot(seg_model, add = TRUE, col = rgb(1,0,0.5,1))
+abline(v = c(knot1, knot2), lty = 2, col = "darkgray", lwd = 1.5)
+
+# Fit and plot piecewise linear regression using lm() and logical operations
+plot(GC_5K_clean, reads_5K_clean, pch = 16, cex = 0.5, col = rgb(0,0,0,0.5), 
+     xlab = "GC Content (cleaned)", ylab = "Read Counts (cleaned)",
+     main = "Piecewise Quadratic Regression")
+
+# Fit piecewise polynomial regression with higher-degree polynomials
+quad_model = lm(reads_5K_clean 
+              ~ I((GC_5K_clean - knot1)^2 * (GC_5K_clean < knot1)) +
+                I((GC_5K_clean - knot2)^2 * (GC_5K_clean >= knot1 & 
+                                               GC_5K_clean < knot2)) +
+                I((GC_5K_clean - knot2)^2 * (GC_5K_clean >= knot2)))
+
+# Predict and plot the piecewise quadratic model
+new_data_quad = data.frame(GC_5K_clean = seq(min(GC_5K_clean), 
+                                             max(GC_5K_clean), 
+                                             length.out = 100))
+predictions = predict(quad_model, newdata = new_data_quad)
+
+lines(new_data_quad$GC_5K_clean, predictions, col = rgb(0,0.5,1,1), lwd = 2)
+
+# Plot knots for reference
+abline(v = c(knot1, knot2), lty = 2, col = "darkgray", lwd = 1.5)
+
+# Fit and plot piecewise linear regression using lm() and logical operations
+plot(GC_5K_clean, reads_5K_clean, pch = 16, cex = 0.5, col = rgb(0,0,0,0.5), 
+     xlab = "GC Content (cleaned)", ylab = "Read Counts (cleaned)",
+     main = "Piecewise Linear Regression")
+
+lin_model = lm(reads_5K_clean ~ I(GC_5K_clean * (GC_5K_clean < knot1)) +
+                      I(GC_5K_clean * (GC_5K_clean >= knot1 & 
+                                         GC_5K_clean < knot2)) +
+                      I(GC_5K_clean * (GC_5K_clean >= knot2)))
+
+# Predict and plot the piecewise linear model using lm() and logical operations
+new_data_lin = data.frame(GC_5K_clean = seq(min(GC_5K_clean), 
+                                            max(GC_5K_clean), 
+                                            length.out = 100))
+predictions = predict(lin_model, newdata = new_data_lin)
+
+lines(new_data_lin$GC_5K_clean, predictions, col = rgb(0,1,0.5,1), lwd = 2)
+
+# Plot knots for reference
+abline(v = c(knot1, knot2), lty = 2, col = "darkgray", lwd = 1.5)
+
+
+```
+
+
+# Question 2: Residuals vs Explanatory Variable
+Let's start by comparing the residuals of the piecewise polynomial model and the linear model. Ideally, residuals should be randomly distributed around zero without any discernible pattern.
+
+
+```{r}
+
+# Calculate residuals
+poly_res = reads_5K_clean - predict(seg_model)
+quad_res = reads_5K_clean - predict(quad_model)
+lin_res = reads_5K_clean - predict(lin_model)
+
+# Plot residuals side by side
+# par(mfrow = c(3, 1))  # Three plots in one column
+
+# Plot residuals for piecewise polynomial model
+plot(GC_5K_clean, poly_res, pch = 16, cex = 0.5, col = rgb(0, 0, 0, 0.5),
+     xlab = "GC Content (cleaned)", ylab = "Residuals",
+     main = "Residuals of Piecewise Polynomial Model")
+
+# Plot residuals for linear model
+plot(GC_5K_clean, lin_res, pch = 16, cex = 0.5, col = rgb(0, 0, 0, 0.5),
+     xlab = "GC Content (cleaned)", ylab = "Residuals",
+     main = "Residuals of Piecewise Linear Model")
+
+# Plot residuals for segmented model
+plot(GC_5K_clean, quad_res, pch = 16, cex = 0.5, col = rgb(0, 0, 0, 0.5),
+     xlab = "GC Content (cleaned)", ylab = "Residuals",
+     main = "Residuals of Piecewise Quadratic Model")
+
+# Reset plot layout
+# par(mfrow = c(1, 1))
+
+```
+     
+# Bias Assessment
+Bias for Certain GC Values: If there is a noticeable pattern (e.g., residuals consistently above or below zero) in the residuals plot for certain ranges of GC values, it indicates bias. A good fit will have residuals scattered randomly around zero, without any specific trend or pattern. The goal is to have residuals that are evenly distributed around zero across all GC values, indicating that the model does not systematically over or under-predict for specific GC ranges. This will help us determine if there is any bias for certain GC values.
+
+
+# Numerical Comparison Metrics
+Now, we calculate and compare Root Mean Squared Error, Mean Absolute Error and R-squared values for both models.
+
+```{r}
+
+# Predictions from the models
+pred_seg = predict(seg_model)
+pred_linear = predict(lin_model)
+pred_quad = predict(quad_model)
+
+# Compute metrics for both models
+met_seg = helpers$fitMet(reads_5K_clean, pred_seg)
+met_lin = helpers$fitMet(reads_5K_clean, pred_linear)
+met_quad = helpers$fitMet(reads_5K_clean, pred_quad)
+
+# Combine metrics for comparison
+metrics_comparison = data.frame(
+  Model = c("Segmented", "Linear", "Quadratic"),
+  R_sqr = c(met_seg$R_sqr, met_lin$R_sqr, met_quad$R_sqr),
+  MSE = c(met_seg$MSE, met_lin$MSE, met_quad$MSE),
+  MAE = c(met_seg$MAE, met_lin$MAE, met_quad$MAE),
+  MSPE = c(met_seg$MSPE, met_lin$MSPE, met_quad$MSPE)
+)
+
+print(metrics_comparison)
+
+```
+
+# Conclusion
+Based on the visual comparison of residuals and numerical comparison metrics:
+
+The model using the `segmented` package shows more evenly distributed residuals around zero, indicating a potentially better fit than the linear or the quadratic models. The MSPE, MSE and R-squared metrics further support this indication.
+

@@ -1,0 +1,274 @@
+---
+title: "HW1"
+author: "Group Name"
+date: "7 May 2024"
+output:
+  html_document:
+    code_folding: show
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+Group:
+
+Group members (Name, ID, email)
+
+ - Yosef Yosef   
+ - Yuval Yuval 
+ - Amin Amin 
+
+
+### Libraries used
+
+Please load all libraries that you will use throughout the code in this block.
+
+TODO:
+```{r libraries}
+
+#library("")
+```
+
+
+### Paths and Data
+
+Please use this block to write the paths for all the files you are loading. 
+If you have a function file, please add it to the submission and call it using a relative path. 
+
+```{r paths}
+######## CHANGE THESE FILENAMES
+load("C:/Users/User/Documents/principles/lab/chr1_str_10M_30M.rda")
+#ls()
+
+
+
+```
+
+## Introduction 
+
+Short intro discussing the goal of this week.
+
+## Part 1
+
+Short explanation on method or idea. 
+
+## Part 2
+```{r part1, fig.width=5, fig.height=5}
+# הגדרת הפונקציה להחזרת מספר האותיות בקטע המבוקש
+num_bases <- function(chr, index, num_ap) {
+  # יצירת מחרוזת חלקית מהאובייקט על פי אינדקס התחלה ומספר האלמנטים
+  partial_string <- substr(chr, index, index + num_ap - 1)
+  # החזרת טבלה עם מספר ההופעות של כל אות במחרוזת החלקית
+  return(table(strsplit(partial_string, NULL)[[1]]))
+}
+
+result <- num_bases(chr1_str_10M_30M, 2, 1000)
+print(result)
+
+# Figure if needed
+
+#plot(1:10,1:10, main = "Analysis", xlim= c(1,10), ylim = c(1,10), 
+ #    xlab = "X Variable")
+
+
+```
+
+Short explanation on what we learn from the graph. 
+
+```{r}
+#delete
+N = length(chr1_line)
+bin_size = 2000
+n_bins = ceiling(N/bin_size)
+A_count = numeric(N/bin_size)
+for (i in 1:n_bins){
+  start_bin = 1+ (i-1)*bin_size
+  end_bin = i*bin_size
+  A_count[i] = sum(chr1_line[start_bin:end_bin] =="A")
+}
+hist(A_count)
+rug(A_count)
+plot(density(A_count,na.rm=T))
+rug(A_count)
+
+length(A_count)
+summary(A_count)
+boxplot(A_count,horizontal=TRUE)
+# Is it similar to an 0.25 Binomial?
+# You can check...
+
+# Is it similar to a normal?
+norm_A = (A_count - mean(A_count,na.rm=TRUE))/sd(A_count,na.rm=TRUE)
+below05 = (norm_A < qnorm(0.05))
+mean(below05,na.rm=T)
+above95 = (norm_A > qnorm(0.95))
+mean(above95,na.rm=T)
+
+```
+## Part 3+4
+
+```{r}
+#delete
+region_line= strsplit(chr1_str_10M_30M,'')[[1]]
+chr1_line = factor(region_line, c("A","T","C","G"))
+
+N = length(chr1_line)
+bin_size = 2000
+n_bins = ceiling(N/bin_size)
+bases = c("A", "C", "T", "G")
+
+# Create a list to hold the counts for each base
+base_counts = list()
+
+for (base in bases) {
+  base_count = numeric(n_bins)
+  for (i in 1:n_bins) {
+    start_bin = 1 + (i - 1) * bin_size
+    end_bin = i * bin_size
+    base_count[i] = sum(chr1_line[start_bin:end_bin] == base)
+  }
+  base_counts[[base]] = base_count
+  
+  # Plotting histograms and other statistics for each base
+  hist(base_count, main = paste("Histogram of", base), xlab = paste(base, "Count"))
+  rug(base_count)
+  plot(density(base_count, na.rm = TRUE), main = paste("Density of", base), xlab = paste(base, "Count"))
+  rug(base_count)
+  
+  print(paste("Summary of", base, "counts:"))
+  print(summary(base_count))
+  boxplot(base_count, horizontal = TRUE, main = paste("Boxplot of", base, "counts"))
+  
+  # Check if similar to 0.25 Binomial
+  # Check if similar to normal
+  norm_base = (base_count - mean(base_count, na.rm = TRUE)) / sd(base_count, na.rm = TRUE)
+  below05 = (norm_base < qnorm(0.05))
+  print(paste("Proportion below 0.05 for", base, ":"))
+  print(mean(below05, na.rm = TRUE))
+  above95 = (norm_base > qnorm(0.95))
+  print(paste("Proportion above 0.95 for", base, ":"))
+  print(mean(above95, na.rm = TRUE))
+}
+
+# If you want to access the counts later:
+# base_counts$A, base_counts$C, base_counts$T, base_counts$G
+
+
+```
+## Part 3+4
+
+```{r}
+N = length(chr1_line)
+bin_size = 2000
+n_bins = ceiling(N/bin_size)
+bases = c("A", "C", "T", "G")
+
+# Create a list to hold the counts for each base
+base_counts = list()
+
+for (base in bases) {
+  base_count = numeric(n_bins)
+  for (i in 1:n_bins) {
+    start_bin = 1 + (i - 1) * bin_size
+    end_bin = i * bin_size
+    base_count[i] = sum(chr1_line[start_bin:end_bin] == base)
+  }
+  base_counts[[base]] = base_count
+  
+  # Plotting histograms and other statistics for each base
+  hist(base_count, main = paste("Histogram of", base), xlab = paste(base, "Count"))
+  rug(base_count)
+  plot(density(base_count, na.rm = TRUE), main = paste("Density of", base), xlab = paste(base, "Count"))
+  rug(base_count)
+  
+  print(paste("Summary of", base, "counts:"))
+  print(summary(base_count))
+
+  # Check if similar to 0.25 Binomial
+  # Check if similar to normal
+  norm_base = (base_count - mean(base_count, na.rm = TRUE)) / sd(base_count, na.rm = TRUE)
+  below05 = (norm_base < qnorm(0.05))
+  print(paste("Proportion below 0.05 for", base, ":"))
+  print(mean(below05, na.rm = TRUE))
+  above95 = (norm_base > qnorm(0.95))
+  print(paste("Proportion above 0.95 for", base, ":"))
+  print(mean(above95, na.rm = TRUE))
+  
+  # Additional plots
+  plot((1:n_bins) * bin_size, base_count, pch = 20, cex = 0.5, xlab = "Location", main = paste(base, "Count vs. Location"))
+  abline(h = 0.25, col = "red")
+}
+
+# If you want to access the counts later:
+# base_counts$A, base_counts$C, base_counts$T, base_counts$G
+
+
+```
+
+
+```{r}
+
+# Plot all bases in one plot
+colors <- c("red", "blue", "green", "purple")
+# Calculate ylim to ensure finite values
+all_counts <- unlist(base_counts)
+finite_counts <- all_counts[is.finite(all_counts)]
+ylim_range <- range(finite_counts, na.rm = TRUE)
+
+plot((1:n_bins) * bin_size, base_counts[[1]], type = "l", col = colors[1], ylim = ylim_range, xlab = "Location", ylab = "Count", main = "Base Counts Across Locations")
+for (i in 2:length(bases)) {
+  lines((1:n_bins) * bin_size, base_counts[[i]], col = colors[i])
+}
+legend("topright", legend = bases, col = colors, lty = 1)
+```
+```{r}
+# Plot all bases in one plot
+colors <- c("red", "blue", "green", "purple")
+# Calculate ylim to ensure finite values
+all_counts <- unlist(base_counts)
+finite_counts <- all_counts[is.finite(all_counts)]
+ylim_range <- range(finite_counts, na.rm = TRUE)
+
+# Set up a 2x2 plotting area
+par(mfrow = c(2, 2))
+
+# Plot each base in a separate subplot
+for (i in 1:length(bases)) {
+  plot((1:n_bins) * bin_size, base_counts[[i]], type = "l", col = colors[i], ylim = ylim_range, xlab = "Location", ylab = "Count", main = paste(bases[i], "Count vs. Location"))
+}
+
+# Reset plotting area to default
+par(mfrow = c(1, 1))
+```
+מהתבוננות בתמונה אפשר לראות:
+
+שונות הבסיסים: ניתן לראות הבדלים בשכיחות הבסיסים השונים לאורך המיקום בכרומוזום. נראה שכל הבסיסים מציגים מגמות כלליות דומות עם שינויים לאורך המיקום.
+הבדלים בעוצמת השכיחות: יש הבדלים בשכיחות המקסימלית והמינימלית של כל בסיס. לדוגמה, בסיס A מראה עליות וירידות ברורות יותר בשכיחותו בהשוואה לבסיסים האחרים.
+```{r}
+# Avoid scientific notation
+options(scipen = 999)
+
+# Set up a 2x2 plotting area
+par(mfrow = c(2, 2))
+
+# Plot each base in a separate subplot with smoothed lines
+colors <- c("red", "blue", "green", "purple")
+for (i in 1:length(bases)) {
+  base_count <- base_counts[[i]]
+  valid_indices <- which(is.finite(base_count))
+  smoothed_counts <- smooth.spline((1:n_bins)[valid_indices] * bin_size, base_count[valid_indices])
+  
+  plot((1:n_bins) * bin_size, base_count, type = "l", col = colors[i], ylim = ylim_range, xlab = "Location", ylab = "Count", main = paste(bases[i], "Count vs. Location"))
+  lines(smoothed_counts, col = "black", lwd = 2)
+}
+
+# Reset plotting area to default
+par(mfrow = c(1, 1))
+
+
+```
+## Part 4
+
+## Short summary
+
+Something you've learned. 

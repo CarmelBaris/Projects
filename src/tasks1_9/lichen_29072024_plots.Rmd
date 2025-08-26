@@ -1,0 +1,412 @@
+
+### Clean Environment
+
+```{r clean}
+rm(list = ls())
+```
+
+### Libraries used
+
+```{r libraries}
+
+library('ggplot2')
+library('splines')
+library('dplyr')
+library('segmented')
+
+```
+
+
+### Paths and Data
+
+```{r paths}
+######## CHANGE THESE FILENAMES
+
+path = "~/Carmel/RProjects/Lab_Benjamini/data"
+
+load("~/Carmel/RProjects/Lab_Benjamini/data/GC_100.rda")
+load("~/Carmel/RProjects/Lab_Benjamini/data/reads_100_A2.rda")
+load("~/Carmel/RProjects/Lab_Benjamini/data/reads_100_B2.rda")
+
+short_GC_100 <- GC_100[0:2471993]
+# length(short_GC_100)
+# length(reads_100_A2)
+# length(reads_100_B2)
+
+# Function to merge every 25 cells
+merge_25_cells <- function(x) {
+  merged <- sapply(seq(1, length(x), by=25), function(i) sum(x[i:min(i+24, length(x))]))
+  return(merged)
+}
+
+# Apply the function to the datasets (merge every 25 cells)
+# Cell of 2500 bases
+merged_GC_100 <- merge_25_cells(short_GC_100)
+merged_reads_100_A2 <- merge_25_cells(reads_100_A2)
+merged_reads_100_B2 <- merge_25_cells(reads_100_B2)
+```
+
+### Reads in Cancer Sample 25M:30M
+```{r}
+
+# Set the scientific notation option to FALSE
+# options(scipen = 999)
+
+# Plot the data with additional formatting
+plot(merged_reads_100_A2 , ylim = c(0,500), xlim = c(10000,12000),
+     main = "Reads in Cancer Sample 25M:30M",      # Title of the plot
+     xlab = "Index",                    # Label for the x-axis
+     ylab = "Read Count",               # Label for the y-axis
+     col = "blue",                      # Color of the points
+     pch = 19,                          # Shape of the points
+     cex = 0.5)                         # Size of the points
+
+# Add a grid for better readability
+grid()
+
+# Add vertical lines parallel to the y-axis
+abline(v = 11420, col = "red", lw=2)
+abline(v = 11470, col = "red", lw=2)
+```
+
+
+### GC Distribution in 25M:30M
+
+```{r}
+# Set the scientific notation option to FALSE
+# options(scipen = 999)
+
+# Plot the data with additional formatting
+plot(merged_GC_100 , xlim = c(10000,12000),
+     main = "GC Distribution 25M:30M",      # Title of the plot
+     xlab = "Index",                    # Label for the x-axis
+     ylab = "Read Count",               # Label for the y-axis
+     col = "blue",                      # Color of the points
+     pch = 19,                          # Shape of the points
+     cex = 0.5)                         # Size of the points
+
+# Add a grid for better readability
+grid()
+
+
+```
+
+
+### Summary of Cancer Sample 25M:30M
+
+```{r}
+# Check the data subset
+summary(merged_reads_100_A2[10000:12000])
+
+```
+
+### Distribution of Tumor Sample 25M:30M
+```{r}
+subset_data <- merged_reads_100_A2[10000:12000]
+hist(
+  subset_data,
+  breaks = 40, # Increase the number of bins for more detail
+  col = "skyblue", # Color of the bars
+  main = "Distribution of Reads 25M:30M",
+  xlab = "Reads",
+  ylab = "Frequency",
+  border = "white"
+)
+grid(nx = NULL, ny = NULL, col = "gray", lty = "dotted") # Add gridlines
+
+```
+
+### Non-uniform Poisson Distribution
+```{r}
+set.seed(40)
+data_range <- merged_reads_100_A2[10000:12000]
+
+# Define a varying lambda function (linear in this case)
+# For instance, let lambda increase linearly with the index
+index <- seq_along(data_range)
+lambda <- merged_reads_100_A2[10000:12000]
+
+# Generate Poisson-distributed data based on the varying lambda
+poisson_data <- rpois(length(data_range), lambda)
+# poisson_data <- rnorm(length(data_range), lambda, 1)
+
+
+hist(
+  poisson_data,
+  breaks = 40, # Increase the number of bins for more detail
+  col = "skyblue", # Color of the bars
+  main = "Non-uniform Poisson Distribution",
+  xlab = "Expected Reads",
+  ylab = "Frequency",
+  border = "white"
+)
+grid(nx = NULL, ny = NULL, col = "gray", lty = "dotted") # Add gridlines
+
+
+```
+
+### Distribution of Reads 25M:30M (Side by Side)
+
+```{r}
+# Assuming merged_reads_100_A2 is your data vector
+# Extract the specified range
+subset_data <- merged_reads_100_A2[10000:12000]
+
+# Set up the plotting area to have 1 row and 2 columns
+par(mfrow = c(1, 2))
+
+# Create the first histogram
+hist(
+  subset_data,
+  breaks = 40, # Increase the number of bins for more detail
+  col = "skyblue", # Color of the bars
+  main = "Distribution of Reads 25M:30M",
+  xlab = "Reads",
+  ylab = "Frequency",
+  border = "white"
+)
+grid(nx = NULL, ny = NULL, col = "gray", lty = "dotted") # Add gridlines
+
+# Set seed for reproducibility
+set.seed(40)
+
+# Define a varying lambda function (linear in this case)
+lambda <- merged_reads_100_A2[10000:12000]
+
+# Generate Poisson-distributed data based on the varying lambda
+poisson_data <- rpois(length(lambda), lambda)
+
+# Create the second histogram
+hist(
+  poisson_data,
+  breaks = 40, # Increase the number of bins for more detail
+  col = "skyblue", # Color of the bars
+  main = "Non-uniform Poisson Distribution",
+  xlab = "Expected Reads",
+  ylab = "Frequency",
+  border = "white"
+)
+grid(nx = NULL, ny = NULL, col = "gray", lty = "dotted") # Add gridlines
+
+# Reset plotting layout
+par(mfrow = c(1, 1))
+
+
+```
+
+
+### Remove Outliers Before Fitting
+```{r}
+
+remove_outliers_by_std <- function(y, x, num_std) {
+  std_y = sd(y)
+  mean_y = mean(y)
+  
+  lower_threshold <- mean_y - num_std*std_y
+  upper_threshold <- mean_y + num_std*std_y
+  
+  non_outlier_indices <- which(y >= lower_threshold & y <= upper_threshold)
+  filtered_y <- y[non_outlier_indices]
+  filtered_x <- x[non_outlier_indices]
+  return(list(filtered_y = filtered_y, filtered_x = filtered_x))
+ }
+
+
+remove_zero_reads <- function(reads, gc) {
+  non_zero_indices <- which(reads != 0)
+  filtered_reads <- reads[non_zero_indices]
+  filtered_gc <- gc[non_zero_indices]
+  return(list(filtered_reads = filtered_reads, filtered_gc = filtered_gc))
+}
+
+
+remove_outliers<-function(reads,gc, by_reads= FALSE, by_gc = FALSE, by_zero_reads = FALSE, num_std = 2){
+  if (by_reads){
+    filtered_data = remove_outliers_by_std(reads,gc,num_std)
+    num_outliers_by_reads = length(reads) - length(filtered_data$filtered_y)
+    percentage_outliers_by_reads = (num_outliers_by_reads/length(reads))*100
+    print(paste("Percentage of outliers by reads:", percentage_outliers_by_reads, "Number:", num_outliers_by_reads))
+    reads = filtered_data$filtered_y
+    gc = filtered_data$filtered_x
+  }
+  if (by_gc){
+    filtered_data = remove_outliers_by_std(gc,reads,num_std)
+    num_outliers_by_reads = length(reads) - length(filtered_data$filtered_x)
+    percentage_outliers_by_reads = (num_outliers_by_reads/length(reads))*100
+    paste("Percentage of outliers by gc:", percentage_outliers_by_reads)
+    reads = filtered_data$filtered_x
+    gc = filtered_data$filtered_y
+  }
+  if (by_zero_reads){
+    filtered_data = remove_zero_reads(reads,gc)
+    reads = filtered_data$filtered_reads
+    gc = filtered_data$filtered_gc
+  }
+  return(list(filtered_reads = reads, filtered_gc = gc))
+}
+
+#T
+filtered_data_t = remove_outliers(merged_reads_100_A2, merged_GC_100, by_reads = TRUE, by_gc = FALSE, FALSE, 2)
+filtered_reads_t = filtered_data_t$filtered_reads
+filtered_GC_t =  filtered_data_t$filtered_gc
+
+# #N
+# filtered_data_n = remove_outliers(merged_reads_100_B2,merged_GC_100, by_reads =FALSE, by_gc = FALSE)
+# filtered_reads_n = filtered_data_n$filtered_reads
+# filtered_GC_n =  filtered_data_n$filtered_gc
+
+
+bspline_mod <- function(x, y,knots, degree) {
+  mod = lm(y~bs(x,knots = knots, degree = degree))
+return (mod)
+}
+
+knots = c(11,13,16) 
+degree = 3
+
+model_t = bspline_mod(filtered_GC_t, filtered_reads_t, knots, degree)
+# model_n = bspline_mod(filtered_GC_n, filtered_reads_n, knots, degree)
+
+
+
+df_t <-data.frame(filtered_GC_t, filtered_reads_t)
+resp_t = predict(model_t,df_t)
+df_t$resp_t = resp_t
+df_t_sorted <- df_t[order(df_t$filtered_GC_t), ]
+
+
+plot(filtered_GC_t, filtered_reads_t,
+     main = "Reads VS GC content Cancer",
+     xlab = "GC content [%]",
+     ylab = paste("Reads per", 2500, "bases"),
+     xlim = c(0, 20),
+     ylim = c(0,500))
+
+
+# Add a trendline
+lines(df_t_sorted$filtered_GC_t, df_t_sorted$resp_t, col=4, lw= 4)
+```
+
+### Remove Outliers Before Fitting 2.0
+
+```{r}
+# Modified remove_outliers_by_std to return outlier indices
+remove_outliers_by_std <- function(y, x, num_std) {
+  std_y = sd(y)
+  mean_y = mean(y)
+  
+  lower_threshold <- mean_y - num_std * std_y
+  upper_threshold <- mean_y + num_std * std_y
+  
+  non_outlier_indices <- which(y >= lower_threshold & y <= upper_threshold)
+  outlier_indices <- which(y < lower_threshold | y > upper_threshold)
+  filtered_y <- y[non_outlier_indices]
+  filtered_x <- x[non_outlier_indices]
+  return(list(filtered_y = filtered_y, filtered_x = filtered_x, outlier_indices = outlier_indices))
+}
+
+remove_zero_reads <- function(reads, gc) {
+  non_zero_indices <- which(reads != 0)
+  filtered_reads <- reads[non_zero_indices]
+  filtered_gc <- gc[non_zero_indices]
+  return(list(filtered_reads = filtered_reads, filtered_gc = filtered_gc))
+}
+
+remove_outliers <- function(reads, gc, by_reads = FALSE, by_gc = FALSE, by_zero_reads = FALSE, num_std = 2) {
+  outlier_indices <- NULL
+  
+  if (by_reads) {
+    filtered_data = remove_outliers_by_std(reads, gc, num_std)
+    num_outliers_by_reads = length(reads) - length(filtered_data$filtered_y)
+    percentage_outliers_by_reads = (num_outliers_by_reads / length(reads)) * 100
+    print(paste("Percentage of outliers by reads:", percentage_outliers_by_reads, "Number:", num_outliers_by_reads))
+    reads = filtered_data$filtered_y
+    gc = filtered_data$filtered_x
+    outlier_indices = filtered_data$outlier_indices
+  }
+  
+  if (by_gc) {
+    filtered_data = remove_outliers_by_std(gc, reads, num_std)
+    num_outliers_by_gc = length(gc) - length(filtered_data$filtered_x)
+    percentage_outliers_by_gc = (num_outliers_by_gc / length(gc)) * 100
+    paste("Percentage of outliers by gc:", percentage_outliers_by_gc)
+    reads = filtered_data$filtered_x
+    gc = filtered_data$filtered_y
+    outlier_indices = filtered_data$outlier_indices
+  }
+  
+  if (by_zero_reads) {
+    filtered_data = remove_zero_reads(reads, gc)
+    reads = filtered_data$filtered_reads
+    gc = filtered_data$filtered_gc
+  }
+  
+  return(list(filtered_reads = reads, filtered_gc = gc, outlier_indices = outlier_indices))
+}
+
+#T
+filtered_data_t = remove_outliers(merged_reads_100_A2, merged_GC_100, by_reads = TRUE, by_gc = FALSE, by_zero_reads = FALSE, num_std = 2)
+filtered_reads_t = filtered_data_t$filtered_reads
+filtered_GC_t = filtered_data_t$filtered_gc
+outlier_indices_t = filtered_data_t$outlier_indices
+
+bspline_mod <- function(x, y, knots, degree) {
+  mod = lm(y ~ bs(x, knots = knots, degree = degree))
+  return(mod)
+}
+
+knots = c(11, 13, 16) 
+degree = 3
+
+model_t = bspline_mod(filtered_GC_t, filtered_reads_t, knots, degree)
+
+df_t <- data.frame(filtered_GC_t, filtered_reads_t)
+resp_t = predict(model_t, df_t)
+df_t$resp_t = resp_t
+df_t_sorted <- df_t[order(df_t$filtered_GC_t), ]
+
+plot(filtered_GC_t, filtered_reads_t,
+     main = "Reads VS GC content Cancer",
+     xlab = "GC content [%]",
+     ylab = paste("Reads per", 2500, "bases"),
+     xlim = c(0, 20),
+     ylim = c(0, 500))
+
+# Add a trendline
+lines(df_t_sorted$filtered_GC_t, df_t_sorted$resp_t, col = 4, lw = 4)
+
+```
+
+
+### Display Outliers That Were Removed Before Fitting
+
+```{r}
+# Open a larger plotting window
+par(mfrow = c(1, 1), mar = c(5, 5, 2, 2), pty = "s")
+
+# Plot data
+plot(merged_GC_100, merged_reads_100_A2,
+     main = "Reads VS GC content (outliers)",
+     xlab = "GC content",
+     ylab = paste("reads"),
+     xlim = c(0, 20),
+     ylim = c(0, 4000))
+
+# Plot outliers
+points(merged_GC_100[outlier_indices_t], merged_reads_100_A2[outlier_indices_t], col = "red", pch = 19)
+
+
+```
+
+### Reads VS GC content (sample)
+
+```{r}
+set.seed(100) 
+samp = sample(length(filtered_GC_t),10000)
+plot(filtered_GC_t[samp],filtered_reads_t[samp],cex = 0.5,  main = "Reads VS GC content (sample)",
+     xlab = "GC content",xlim = c(7,17),ylim = c(0, 400),
+     ylab = "reads")
+
+# Add a trendline
+lines(df_t_sorted$filtered_GC_t, df_t_sorted$resp_t, col=4, lw= 4)
+```

@@ -1,0 +1,255 @@
+---
+title: "Lab Task 8"
+author: "Group 6"
+date: "`r format(Sys.time(), '%d/%m/%y')`"
+output:
+  html_document:
+    code_folding: show
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+Group members:
+
+- Shawn Yakir , 315714980,  shawn.yakir@mail.huji.ac.il
+- Sarah Levitz, 324673623, sarah.levitz@mail.huji.ac.il
+- Carmel Baris, 318455276, carmel.baris@mail.huji.ac.il 
+
+### Clean the environment
+```{r clean}
+rm(list = ls())
+```
+
+### Libraries used
+
+```{r libraries}
+library('splines')
+```
+
+
+### Paths
+```{r paths}
+path = "~/Carmel/RProjects/Lab_Benjamini/data"
+# path = "/Users/alevi/Downloads/"
+ # path = "\\Users\\shawn\\Desktop\\"
+```
+
+
+### Functions
+
+Correcting functions:
+
+```{r correcting_funcs}
+
+### Median correction
+fix_med = function(samp) {
+  return(samp/median(samp,na.rm=TRUE))
+}
+
+### One sample correction
+fix_gc_e = function(samp, preds, eps=0) {
+  return((samp+eps)/(preds+eps))
+}
+
+
+### Two sample correction
+fix_2samp_e = function(tumor, healthy, eps=0) {
+  return((tumor+eps)/(healthy+eps))
+}
+
+```
+
+
+
+### Load data
+```{r dat}
+load(sprintf("%s/reads_100_A2.rda",path))
+load(sprintf("%s/reads_100_B2.rda",path))
+load(sprintf("%s/GC_100.rda",path))
+```
+
+### Binning
+```{r binning, warning=FALSE}
+binsize = 25
+
+chr2t_mat = matrix(reads_100_A2, nr = binsize)
+chr2n_mat = matrix(reads_100_B2, nr = binsize)
+GC_100=GC_100[1: (length(reads_100_A2)) ]
+gc_mat = matrix(GC_100,nr=binsize)
+
+reads_tumor = colSums(chr2t_mat)
+reads_healthy = colSums(chr2n_mat)
+GC = colMeans(gc_mat)
+
+```
+
+
+### Spatial Distribution of Healthy vs Tumor Reads
+```{r plot_spatial}
+# Plot the data
+set.seed(50)
+samp1 = sample(length(reads_healthy), 10000)
+
+plot(GC[samp1], reads_tumor[samp1], cex = 0.4, pch = 20, 
+     main = "Tumor Sample", ylab = "Fragments Per Bin", xlab = "GC Content",
+     ylim = c(0, 400), xlim = c(0.2, 0.75))
+```
+
+
+### Learn parameters from chromosome 1
+
+```{r reg_lm}
+set.seed(50)
+samp1 = sample(length(reads_healthy), 10000)
+
+
+
+
+myknots = c(0.415, 0.45, 0.54)
+pred_range = seq(0.2,0.75,0.01)
+
+
+
+reg_healthy_lm = lm(reads_healthy~GC,subset = reads_healthy>50 & reads_healthy<350)
+reg_tumor_lm = lm(reads_tumor~GC,subset = reads_tumor>50 & reads_tumor<400)
+
+resp_healthy_lm = predict(reg_healthy_lm,list(GC=pred_range))
+preds_healthy_lm = predict(reg_healthy_lm,list(GC=GC))
+
+response_tumor_lm = predict(reg_tumor_lm,list(GC=pred_range))
+preds_tumor_lm = predict(reg_tumor_lm,list(GC=GC))
+
+plot(GC[samp1], reads_tumor[samp1], cex = 0.4, pch = 20, 
+     main = "Tumor Sample", ylab = "Fragments Per Bin", xlab = "GC Content",
+     ylim = c(0, 400), xlim = c(0.2, 0.75))
+lines(pred_range, response_tumor_lm,col = "maroon",lw=3)
+
+
+```
+
+
+```{r reg_bs}
+set.seed(50)
+samp1 = sample(length(reads_healthy), 10000)
+
+myknots = c(0.36, 0.415, 0.45, 0.54)
+pred_range = seq(0.2,0.75,0.01)
+
+reg_healthy_bs = lm(reads_healthy~bs(GC, degree = 3),subset = reads_healthy>50 & reads_healthy<350 )
+reg_tumor_bs = lm(reads_tumor~bs(GC, degree = 3),subset = (reads_tumor>50)&(reads_tumor<400))
+
+resp_healthy_bs = predict(reg_healthy_bs,list(GC=pred_range))
+preds_healthy_bs = predict(reg_healthy_bs,list(GC=GC))
+
+response_tumor_bs = predict(reg_tumor_bs,list(GC=pred_range))
+preds_tumor_bs = predict(reg_tumor_bs,list(GC=GC))
+
+plot(GC[samp1], reads_tumor[samp1], cex = 0.4, pch = 20, col = rgb(0.2,0.2,0.2,0.8),
+     main = "Tumor Sample", ylab = "Fragments Per Bin", xlab = "GC Content",
+     ylim = c(0, 400), xlim = c(0.2, 0.75))
+lines(pred_range, response_tumor_bs,col = "darkturquoise",lw=3)
+
+
+```
+
+
+
+```{r clean_env1}
+rm("chr2n_mat","chr2t_mat","gc_mat","reads_100_A2","reads_100_B2","GC_100") # remove from memory
+# rm("path", "find_out_boxplot","out_n2","out_reads_xtra","out_t2") # remove from memory
+# rm("GC2.5K", "reads2.5K_n2", "reads2.5K_t2") # remove from memory
+```
+
+```{r}
+gc_fixed_healthy = fix_med(fix_gc_e(reads_healthy, preds_healthy_bs))
+gc_fixed_tumor = fix_med(fix_gc_e(reads_tumor, preds_tumor_bs))
+med_2samp_eps0.3_gc = fix_med(fix_2samp_e(gc_fixed_tumor, gc_fixed_healthy, 0.3))
+```
+
+
+```{r}
+sim_from_model_tum = function(a_line, gc_line, f_func, sd_beta, sd_gamma) {
+  stopifnot(length(a_line) == length(gc_line))
+  
+  n = length(gc_line)
+  
+  gc_effects = predict(f_func, list(GC = gc_line))
+  
+  beta_line = rnorm(n, mean = 1, sd = sd_beta)
+  gamma_line = rnorm(n, mean = 1, sd = sd_gamma)
+  
+  Y = rpois(n = n, lambda = a_line * gc_effects * beta_line * gamma_line)
+  
+  sim_dat = data.frame(list(Y = Y, gamma_line = gamma_line, beta_line = beta_line,
+                            gc_effects = gc_effects, GC = gc_line, a_line = a_line))
+  
+  return(sim_dat)
+}
+
+```
+
+
+
+```{r}
+df=sim_from_model_tum(a_line=med_2samp_eps0.3_gc, 
+                   gc_line=GC, f_func=reg_tumor_bs, 
+                   sd_beta=1,sd_gamma=1)
+
+plot(df$a_line, ylim = c(-1,3), xlab="", xaxt="n")
+plot(df$a_line[samp1])
+plot(df$GC, df$gc_effects)
+```
+
+```{r}
+{r}
+# First plot
+par(mfrow=c(1,1), mar = c(4,4,2,2), oma = c(3,4,3,2))
+
+verticals = seq(from = 1500, to = 6000, by = 250)
+
+plot(unfixed_2t_gc_med_eps[stiched_range], 
+     ylab = "Est. Number of Copies (a hat)", xaxt = "n",
+     ylim = c(0,2), xlim = c(0,6000),
+     cex = 1, pch=20, col = col_healthy
+     )
+abline(h=c(0.5,1.5), v=verticals, col= "lightgray", lwd = 0.6)
+abline(v=c(750,900,4000),col=c("orange","orange",6), lt = c(1, 1, 2), lwd = c(1.4, 1.4, 1.3))
+abline(h=1, col=4, lwd = 2)
+mtext("Median", side = 3, cex = 1, col = rgb(0,0,0,0.8), line = 0.5)
+
+# Outer margin text for the first plot
+mtext("Comparing Original to Fixed Data (eps = 0.3)", outer = TRUE, side = 3, line = 1, font = 2)
+#mtext("Est. Number of Copies (a hat)", outer = TRUE, side = 2, line = 1, cex = 0.8)
+#mtext("Selected Locations in Chrom1 (25M-35M, 75M-80M)", outer = TRUE, side = 1, cex = 0.8, line = 1)
+
+# Second plot
+par(mfrow=c(1,1), mar = c(4,4,2,2), oma = c(3,4,3,2))
+
+plot(med_2samp_eps0.3_gc[stiched_range], 
+     main = "",
+     ylab = "Est. Number of Copies (a hat)",
+     xlab = "Selected Locations in Chrom1 (25M-35M, 75M-80M)", 
+     xaxt = "n", 
+     ylim = c(0,2), xlim = c(0,6000),
+     cex = 0.8, pch=20, col = col_healthy)
+abline(h=c(0.5,1.5), v=verticals, col= "lightgray", lwd = 0.6)
+abline(h=1, col=4, lwd = 2)
+abline(v=c(750,900,4000),col=c("orange","orange",6), lt = c(1, 1, 2), lwd = c(1.4, 1.4, 1.3))
+mtext("Median & GC & Two-Samp", side = 3, cex = 1, col = rgb(0,0,0,0.8), line = 0.5)
+
+# Outer margin text for the second plot
+#mtext("Comparing Original to Fixed Data Across Selected Chromosome Locations", outer = TRUE, side = 3, line = 1, font = 2)
+#mtext("Est. Number of Copies (a hat)", outer = TRUE, side = 2, line = 1, cex = 0.8)
+#mtext("Selected Locations in Chrom1 (25M-35M, 75M-80M)", outer = TRUE, side = 1, cex = 0.8, line = 1)
+
+# Additional plot for dots
+par(mfrow=c(1,1), mar = c(4,4,2,2), oma = c(3,4,3,2))
+
+dots = c(1,2,3,4,5,6,7,8)
+plot(dots, col = dots, pch = 20, cex = 4)
+
+
+
+```
+

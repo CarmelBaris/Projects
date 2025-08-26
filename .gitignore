@@ -1,0 +1,26 @@
+# RStudio settings
+.Rproj.user/
+
+# R history and workspace
+.Rhistory
+.RData
+
+# Output files
+output/
+
+# Data and large files
+class-vids/
+data/TCGA-*.*      # large genomics files
+data/reads_*.*      # read files
+data/GC_*.rda       # GC data
+
+# Figures, temporary files
+**/figure-html/
+**/*.html
+**/*.png
+**/*.svg
+
+# OS and editor files
+Thumbs.db
+.DS_Store
+*.lnk

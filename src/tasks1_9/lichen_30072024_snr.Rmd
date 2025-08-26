@@ -1,0 +1,523 @@
+---
+title: "HW9"
+author: "Group 4"
+date: "29 July 2024"
+output:
+  html_document:
+    code_folding: show
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+
+# Prepping
+### Clean the environment 0.0
+
+```{r clean0}
+rm(list = ls())
+```
+
+
+### Libraries used
+
+```{r libraries}
+library('splines')
+```
+
+
+### Paths and Data
+
+```{r paths}
+path = "~/Carmel/RProjects/Lab_Benjamini/data"
+# path = "/Users/alevi/Downloads/"
+# path = "\\Users\\shawn\\Desktop\\"
+```
+
+
+
+### Load data
+```{r dat}
+load(sprintf("%s/GC_100.rda",path))
+load(sprintf("%s/reads_100_A2.rda",path))
+load(sprintf("%s/reads_100_B2.rda",path))
+```
+
+### Binning
+```{r binning}
+len = min(length(GC_100), length(reads_100_A2), length(reads_100_B2))
+GC_trunc = GC_100[0:len]
+
+# Function to merge every 25 cells
+bin2500 = function(dat) {
+  merged = sapply(seq(1, length(dat), by=25), 
+                  function(i) sum(dat[i:min(i+24, length(dat))]))
+  return(merged)
+}
+
+# Apply the function to the datasets (merge every 25 cells)
+GC_binned = bin2500(GC_trunc)
+tumor_binned = bin2500(reads_100_A2)
+healthy_binned = bin2500(reads_100_B2)
+```
+
+### Removing Outliers
+```{r outliers}
+remove_outliers_by_std = function(y, x, num_std) {
+  std_y = sd(y)
+  mean_y = mean(y)
+  
+  lower_threshold = mean_y - num_std*std_y
+  upper_threshold = mean_y + num_std*std_y
+  
+  non_outlier_indices = which(y >= lower_threshold & y <= upper_threshold)
+  filtered_y = y[non_outlier_indices]
+  filtered_x = x[non_outlier_indices]
+  return(list(filtered_y = filtered_y, filtered_x = filtered_x))
+ }
+
+
+remove_zero_reads = function(reads, gc) {
+  non_zero_indices = which(reads != 0)
+  filtered_reads = reads[non_zero_indices]
+  filtered_gc = gc[non_zero_indices]
+  return(list(filtered_reads = filtered_reads, filtered_gc = filtered_gc))
+}
+
+
+remove_outliers=function(reads,gc, by_reads= FALSE, by_gc = FALSE, by_zero_reads = FALSE, num_std = 2){
+  if (by_reads){
+    filtered_data = remove_outliers_by_std(reads,gc,num_std)
+    num_outliers_by_reads = length(reads) - length(filtered_data$filtered_y)
+    percentage_outliers_by_reads = (num_outliers_by_reads/length(reads))*100
+    paste("Percentage of outliers by reads:", percentage_outliers_by_reads)
+    reads = filtered_data$filtered_y
+    gc = filtered_data$filtered_x
+  }
+  if (by_gc){
+    filtered_data = remove_outliers_by_std(gc,reads,num_std)
+    num_outliers_by_reads = length(reads) - length(filtered_data$filtered_x)
+    percentage_outliers_by_reads = (num_outliers_by_reads/length(reads))*100
+    paste("Percentage of outliers by gc:", percentage_outliers_by_reads)
+    reads = filtered_data$filtered_x
+    gc = filtered_data$filtered_y
+  }
+  if (by_zero_reads){
+    filtered_data = remove_zero_reads(reads,gc)
+    reads = filtered_data$filtered_reads
+    gc = filtered_data$filtered_gc
+  }
+  return(list(filtered_reads = reads, filtered_gc = gc))
+}
+
+#T
+filtered_data_t = remove_outliers(tumor_binned,GC_binned,by_reads =FALSE, by_gc = FALSE)
+reads_t = filtered_data_t$filtered_reads
+filtered_GC_t =  filtered_data_t$filtered_gc
+
+#N
+cln_dat_healthy = remove_outliers(healthy_binned,GC_binned, by_reads =FALSE, by_gc = FALSE)
+reads_n = cln_dat_healthy$filtered_reads
+cln_dat_GC =  cln_dat_healthy$filtered_gc
+```
+
+
+# Fitting
+
+### Knots selection and Bspline apply
+```{r spline}
+# create hat_f g for each sample (cancer and healthy separately)
+# hat_f_t
+# hat_f_n
+bspline_mod = function(x, y,knots, degree) {
+  mod = lm(y~bs(x,knots = knots, degree = degree))
+return (mod)
+}
+
+knots = c(11,13,16) 
+degree=3
+
+model_t = bspline_mod(filtered_GC_t, reads_t, knots, degree)
+model_n = bspline_mod(cln_dat_GC, reads_n, knots, degree)
+```
+
+### Spline for Cancer data (hat_f_t)
+```{r fit_tumor}
+# Tumor
+df_t = data.frame(filtered_GC_t, reads_t)
+resp_t = predict(model_t,df_t)
+df_t$resp_t = resp_t
+df_t_sorted = df_t[order(df_t$filtered_GC_t), ]
+
+```
+
+### Spline for Healthy data (hat_f_n)
+```{r fit_health}
+# Normative
+df_n = data.frame(cln_dat_GC, reads_n)
+resp_n = predict(model_n,df_n)
+df_n$resp_n = resp_n
+df_n_sorted = df_n[order(df_n$cln_dat_GC), ]
+```
+
+
+# Correcting
+### Correction functions
+```{r}
+# Median correction with epsilon
+# (used for both with or without GC correction depending on the input vectors)
+gc1samp_fix = function(samp, preds, eps_one) {
+  a_hat = (samp+eps_one)/(preds+eps_one)
+  adj_med = 1/median(a_hat)
+  return(a_hat*adj_med)
+}
+
+
+# Two sample correction with epsilon 
+# (used for both with or without GC correction depending on the input vectors)
+gc2samp_fix = function(tumor, normal,eps_two) {
+  a_hat = (tumor+eps_two)/(normal+eps_two)
+  two_correct_aft_med = a_hat/median(a_hat,na.rm=TRUE)
+  return(two_correct_aft_med)
+}
+```
+
+
+### Corrected: One sample correction with epsilon = 1
+```{r part1}
+onesamp_gc_tumor     = gc1samp_fix(df_t$reads_t,df_t$resp_t,eps_one=1)
+just_med_t   = gc1samp_fix(df_t$reads_t,rep(1,length(df_t$reads_t)),eps_one=1)
+onesamp_gc_healthy   = gc1samp_fix(df_n$reads_n,df_n$resp_n,eps_one=1)
+just_med_h = gc1samp_fix(df_n$reads_n,rep(1,length(df_n$reads_n)),eps_one=1)
+
+```
+
+### Corrected: One sample correction with epsilon = 100
+```{r}
+onesamp_gc_tumor     = gc1samp_fix(df_t$reads_t,df_t$resp_t,eps_one=100)
+just_med_t   = gc1samp_fix(df_t$reads_t,rep(1,length(df_t$reads_t)),eps_one=100)
+onesamp_gc_healthy   = gc1samp_fix(df_n$reads_n,df_n$resp_n,eps_one=100)
+just_med_h = gc1samp_fix(df_n$reads_n,rep(1,length(df_n$reads_n)),eps_one=100)
+
+```
+
+
+### Corrected: Two sample correction with epsilon = 0.01
+```{r}
+# With eps_1 =100
+twosamp_gc      = gc2samp_fix(onesamp_gc_tumor,onesamp_gc_healthy,eps_two=0.01)
+twosamp_no_gc   = gc2samp_fix(just_med_t,just_med_h,eps_two=0.01)
+
+```
+
+
+### Corrected: Two sample correction with epsilon = 0.1
+```{r}
+twosamp_gc     = gc2samp_fix(onesamp_gc_tumor,onesamp_gc_healthy,eps_two=0.1)
+twosamp_no_gc  = gc2samp_fix(just_med_t,just_med_h,eps_two=0.1)
+```
+
+# Ranges
+### Function to find specific areas in the chromosome
+```{r find_subset}
+# find subset
+findSubset = function(start_base, end_base, cell_size){
+  cell_start = start_base/cell_size
+  cell_end = end_base/cell_size
+  chromosome_range = cell_start:cell_end
+  return (chromosome_range)
+}
+
+```
+
+### Choosing Ranges
+```{r ranges}
+size = 2500
+
+# range_a = c(findSubset(25000000,30000000,size))
+# range_b = c(findSubset(28575000,28612500,size))
+#range_0.5_without_gc_outliers = c(1040,1080)
+range_a = c(26250000,27500000)/size
+range_b = c(28575000,28612500)/size
+range_c = c(25000000,27500000)/size
+```
+
+```{r ranges_plot}
+
+begin = 10000
+plot(just_med_h[begin:12000], xaxt="n", 
+     ylim = c(0.5,1.7),
+     main = "Only Median Fix in Healthy Sample",
+     xlab="Chromosomal Location", ylab="Est. No. of Copies")
+abline(h=c(0.7,1), lt=3, col="cornflowerblue", lwd=3)
+abline(v=range_a - begin, col="forestgreen", lwd=2)
+abline(v=range_b - begin, col="indianred", lwd=1.3)
+abline(v=range_c - begin, col="purple", lwd=3, lt=2)
+
+begin = 10000
+plot(just_med_t[begin:12000], xaxt="n", 
+     ylim = c(0.5,1.7),
+     main = "Only Median Fix in Tumor Sample",
+     xlab="Chromosomal Location", ylab="Est. No. of Copies")
+abline(h=c(0.7,1), lt=3, col="cornflowerblue", lwd=3)
+abline(v=range_a - begin, col="forestgreen", lwd=2)
+abline(v=range_b - begin, col="indianred", lwd=1.3)
+abline(v=range_c - begin, col="purple", lwd=3, lt=2)
+
+begin = 10000
+plot(twosamp_no_gc[begin:12000], xaxt="n", 
+     ylim = c(0.5,1.7),
+     main = "After Applying 2Samp Fix (No GC)",
+     xlab="Chromosomal Location", ylab="Est. No. of Copies")
+abline(h=c(0.7,1), lt=3, col="cornflowerblue", lwd=3)
+abline(v=range_a - begin, col="forestgreen", lwd=2)
+abline(v=range_b - begin, col="indianred", lwd=1.3)
+abline(v=range_c - begin, col="purple", lwd=3, lt=2)
+
+begin = 10000
+plot(twosamp_gc[begin:12000], xaxt="n", 
+     ylim = c(0.5,1.7),
+     main = "After Applying GC & 2Samp Fixes",
+     xlab="Chromosomal Location", ylab="Est. No. of Copies")
+abline(h=c(0.7,1), lt=3, col="cornflowerblue", lwd=3)
+abline(v=range_a - begin, col="forestgreen", lwd=2)
+abline(v=range_b - begin, col="indianred", lwd=1.3)
+abline(v=range_c - begin, col="purple", lwd=3, lt=2)
+
+```
+
+
+# SNR
+### SNR Calculation
+```{r snr_calculate}
+snr_after_dunno = mean(twosamp_gc) / sd(twosamp_gc[range_a])
+ 
+# snr_after = mean(twosamp_gc[range_a]) / sd(twosamp_gc[range_b])
+ 
+dist_prefix_t = abs(0.5*mean(just_med_t[range_a]) - 0.5*mean(just_med_t[range_b]))
+std_prefix_t = sqrt(0.5* var(just_med_t[range_a]) + 0.5* var(just_med_t[range_b]))
+snr_before_t = dist_prefix_t / std_prefix_t
+
+dist_prefix_h = abs(0.5*mean(just_med_h[range_a]) - 0.5*mean(just_med_h[range_b]))
+std_prefix_h = sqrt(0.5* var(just_med_h[range_a]) + 0.5* var(just_med_h[range_b]))
+snr_before_h = dist_prefix_h / std_prefix_h
+
+dist_post_gc_h = abs(0.5*mean(onesamp_gc_healthy[range_a]) - 0.5*mean(onesamp_gc_healthy[range_b]))
+std_post_gc_h = sqrt(0.5* var(onesamp_gc_healthy[range_a]) + 0.5* var(onesamp_gc_healthy[range_b]))
+snr_post_gc_h = dist_post_gc_h / std_post_gc_h
+
+dist_post_gc_t = abs(0.5*mean(onesamp_gc_tumor[range_a]) - 0.5*mean(onesamp_gc_tumor[range_b]))
+std_post_gc_t = sqrt(0.5* var(onesamp_gc_tumor[range_a]) + 0.5* var(onesamp_gc_tumor[range_b]))
+snr_post_gc_t = dist_post_gc_t / std_post_gc_t
+
+dist_post_2samp = abs(0.5*mean(twosamp_no_gc[range_a]) - 0.5*mean(twosamp_no_gc[range_b]))
+std_post_2samp = sqrt(0.5* var(twosamp_no_gc[range_a]) + 0.5* var(twosamp_no_gc[range_b]))
+snr_post_2samp = dist_post_2samp / std_post_2samp
+
+dist_post_gc2samp = abs(0.5*mean(twosamp_gc[range_a]) - 0.5*mean(twosamp_gc[range_b]))
+std_post_gc2samp = sqrt(0.5* var(twosamp_gc[range_a]) + 0.5* var(twosamp_gc[range_b]))
+snr_post_gc2samp = dist_post_gc2samp / std_post_gc2samp
+ 
+```
+
+
+```{r}
+range_a = c(findSubset(25000000,30000000,2500))
+range_b = c(findSubset(28575000,28612500,2500))
+
+ 
+dif_med_tumor =  abs(0.5*mean(uncorrected_1t[range_a]) - 0.5*mean(uncorrected_1t[range_b]))
+std_med_tumor = sqrt(0.5* var(uncorrected_1t[range_a]) + 0.5* var(uncorrected_1t[range_b]))
+snr_med_tumor = dif_med_tumor / std_med_tumor
+
+dif_med_health =  abs(0.5*mean(uncorrected_1n[range_a]) - 0.5*mean(uncorrected_1n[range_b]))
+std_med_health = sqrt(0.5* var(uncorrected_1n[range_a]) + 0.5* var(uncorrected_1n[range_b]))
+snr_med_health = dif_med_health / std_med_health
+
+ 
+dif_gc_tumor =  abs(0.5*mean(corrected_1t[range_a]) - 0.5*mean(corrected_1t[range_b]))
+std_gc_tumor = sqrt(0.5* var(corrected_1t[range_a]) + 0.5* var(corrected_1t[range_b]))
+snr_gc_tumor = dif_gc_tumor / std_gc_tumor
+
+dif_gc_health =  abs(0.5*mean(corrected_1n[range_a]) - 0.5*mean(corrected_1n[range_b]))
+std_gc_health = sqrt(0.5* var(corrected_1n[range_a]) + 0.5* var(corrected_1n[range_b]))
+snr_gc_health = dif_gc_health / std_gc_health
+
+dif_nogc2samp =  abs(0.5*mean(two_sample_without_gc[range_a]) - 0.5*mean(two_sample_without_gc[range_b]))
+std_nogc2samp = sqrt(0.5* var(two_sample_without_gc[range_a]) + 0.5* var(two_sample_without_gc[range_b]))
+snr_nogc2samp = dif_nogc2samp / std_nogc2samp
+ 
+dif_gc2samp =  abs(0.5*mean(gc_2samp[range_a]) - 0.5*mean(gc_2samp[range_b]))
+std_gc2samp = sqrt(0.5* var(gc_2samp[range_a]) + 0.5* var(gc_2samp[range_b]))
+snr_gc2samp = dif_gc2samp / std_gc2samp
+```
+
+
+```{r snr_compare}
+cat("Region A ", min(range_a), ":", max(range_a), "\n")
+cat("Region B ", min(range_b), ":", max(range_b), "\n")
+
+cat("\n")
+
+cat("SNR Both Post 2-Sample & GC Fix:", round(snr_gc2samp,2), "\n")
+cat("SNR Both Post 2-Sample Only Fix:", round(snr_nogc2samp,2), "\n")
+cat("SNR Tumor      Post GC Only Fix:", round(snr_gc_tumor,2), "\n")
+cat("SNR Tumor  Before Complex Fixes:", round(snr_med_tumor,2), "\n")
+
+cat("\n")
+
+cat("SNR Both Post 2-Sample & GC Fix:", round(snr_gc2samp,2), "\n")
+cat("SNR Both Post 2-Sample Only Fix:", round(snr_nogc2samp,2), "\n")
+cat("SNR Healthy    Post GC Only Fix:", round(snr_gc_health,2), "\n")
+cat("SNR Health Before Complex Fixes:", round(snr_med_health,2), "\n")
+```
+
+
+
+
+
+
+# Metrics
+### Metrics: MSE, RMSE, and bias Variance decomposition
+```{r}
+mse = function(predicted, expected_mean) {
+  actual = rep(expected_mean, length(predicted))
+  paste("For a exepected =",expected_mean,"mse:",mean((actual - predicted)^2))
+}
+
+
+rmse = function(predicted, expected_mean) {
+  actual = rep(expected_mean, length(predicted))
+  cat("For a exepected =",expected_mean,"rmse:", sqrt(mean((actual - predicted)^2)))
+}
+
+
+bias_var_std = function(vec_correct, expected_mean){
+  bias = mean(vec_correct) - expected_mean
+  variance = var(vec_correct)
+  std = sd(vec_correct)
+  mse_decomposed = (bias^2) + variance
+  cat("For a that we expect is", round(expected_mean,2), "copies",
+      "\n bias:", bias, 
+      "\n mse:", round(mse_decomposed,2),
+      "\n variance:", variance,
+      "\n std:", std)
+  }
+```
+
+### Metrics: Find area of interest in the chromosome
+```{r}
+range_0.5 = c(1428,1465) # Change if needed
+
+split_to_0.5_1 = function(vec_correct, range_0.5){
+  range_0.5_in_cells = range_0.5+10000
+  ind = range_0.5_in_cells[1]:range_0.5_in_cells[2]
+  predicted_0.5 = vec_correct[ind]
+  predicted_1 = vec_correct[-ind]
+  return(list(predicted_0.5=predicted_0.5,predicted_1=predicted_1))
+}
+```
+
+
+### Metrics: Median correction
+```{r}
+vectors = split_to_0.5_1(just_med_t, range_0.5)
+vec_0.5 = vectors$predicted_0.5
+vec_1 = vectors$predicted_1
+
+mse(vec_0.5,0.5)
+rmse(vec_0.5,0.5)
+bias_var_std(vec_0.5,0.5)
+paste("")
+mse(vec_1,1)
+rmse(vec_1,1)
+bias_var_std(vec_1,1)
+```
+
+### Metrics: One Sample correction
+```{r}
+vectors = split_to_0.5_1(onesamp_gc_tumor, range_0.5)
+vec_0.5 = vectors$predicted_0.5
+vec_1 = vectors$predicted_1
+
+mse(vec_0.5,0.5)
+rmse(vec_0.5,0.5)
+bias_var_std(vec_0.5,0.5)
+paste("")
+mse(vec_1,1)
+rmse(vec_1,1)
+bias_var_std(vec_1,1)
+```
+
+### Metrics: Two Sample correction
+```{r}
+vectors = split_to_0.5_1(twosamp_no_gc, range_0.5)
+vec_0.5 = vectors$predicted_0.5
+vec_1 = vectors$predicted_1
+
+mse(vec_0.5,0.5)
+rmse(vec_0.5,0.5)
+bias_var_std(vec_0.5,0.5)
+paste("")
+mse(vec_1,1)
+rmse(vec_1,1)
+bias_var_std(vec_1,1)
+```
+
+### Metrics: Two Sample + GC correction
+```{r}
+vectors = split_to_0.5_1(twosamp_gc, range_0.5)
+vec_0.5 = vectors$predicted_0.5
+vec_1 = vectors$predicted_1
+
+mse(vec_0.5,0.5)
+rmse(vec_0.5,0.5)
+bias_var_std(vec_0.5,0.5)
+paste("")
+mse(vec_1,1)
+rmse(vec_1,1)
+bias_var_std(vec_1,1)
+```
+
+
+
+# Draft
+### Plot setup
+
+```{r plot_setup}
+## x = twosamp_gc[range_a] # is this a different x?
+
+# par(mfcol = c(2,1), mar = c(4, 4, 2, 2))  # מרווחים מותאמים כדי להוסיף כותרות לצירים
+
+# הגדרת התוויות
+# x_labels = seq(10000, 12000, by = 500)
+# num_labels = length(range_a)
+# at_positions = seq(1, num_labels, length.out = length(x_labels))
+# red_lines_positions = c(11420, 11470)
+# red_lines_at = approx(x = x_labels, y = at_positions, xout = red_lines_positions)$y
+
+```
+
+
+### Trim & Hist & Summary
+```{r}
+ind = 11070:11100
+predicted_0.5 = twosamp_gc[11070:11100]
+predicted_1 = twosamp_gc[-ind]
+trim = function(x,l,u){ pmax(pmin(x, u), l) }
+b_trim= seq(0.5,3.5,0.05)
+hist(predicted_0.5)
+hist(predicted_1)
+summary(predicted_1)
+summary(predicted_0.5)
+
+sum(predicted_1[predicted_1<(mean(predicted_1)-2*0.09)])/length(predicted_1)
+sum(predicted_1[predicted_1>(mean(predicted_1)+2*0.09)])/length(predicted_1)
+
+sum(predicted_0.5[predicted_0.5<(mean(predicted_0.5)-2*sd(predicted_0.5))])/length(predicted_0.5)
+sum(predicted_0.5[predicted_0.5>(mean(predicted_0.5)+2*sd(predicted_0.5))])/length(predicted_0.5)
+
+```
+
+
+

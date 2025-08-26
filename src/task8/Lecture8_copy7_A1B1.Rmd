@@ -1,0 +1,301 @@
+---
+title: "Lecture8"
+author: "Yuval Benjamini"
+date: "9 July 2024"
+output: html_document
+---
+
+```{r}
+path = "~/Carmel/RProjects/Lab_Benjamini/data"
+load(sprintf("%s/reads_100_A1.rda",path))
+load(sprintf("%s/reads_100_B1.rda",path))
+load(sprintf("%s/reads_100_A2.rda",path))
+load(sprintf("%s/reads_100_B2.rda",path))
+load(sprintf("%s/GC_100.rda",path))
+```
+
+
+
+
+```{r correcting_funcs}
+
+### Median correction
+fix_med = function(samp) {
+  return(samp/median(samp,na.rm=TRUE))
+}
+
+### One sample correction
+fix_gc_e = function(samp, preds, eps=0) {
+  return((samp+eps)/(preds+eps))
+}
+
+
+### Two sample correction
+fix_2samp_e = function(tumor, healthy, eps=0) {
+  return((tumor+eps)/(healthy+eps))
+}
+
+```
+
+
+### Binning
+```{r}
+chr1t_mat = matrix(reads_100_A1, nr = 50)
+chr1n_mat = matrix(reads_100_B1, nr = 50)
+gc_mat = matrix(GC_100,nr=50)
+
+reads_5K_t = colSums(chr1t_mat)
+reads_5K_n = colSums(chr1n_mat)
+GC_5K = colMeans(gc_mat)
+```
+
+### Spatial Distribution of Normative vs Tumor Reads
+```{r}
+par(mfcol =c(2,1),mar =c(1,1,1,1))
+set.seed(50)
+samp1 = sample(length(reads_5K_n),5000)
+plot(GC_5K[samp1],reads_5K_n[samp1],ylim = c(0,600),xlim = c(0.2,.75), cex = 0.5, pch=20)
+plot(GC_5K[samp1],reads_5K_t[samp1],ylim = c(0,600),xlim = c(0.2,.75),cex = 0.5, pch=20)
+
+```
+### Fitting f(GC) for Healthy Sample
+Learn parameters from chromosome 1
+
+```{r}
+library(splines)
+
+l_1n = length(reads_5K_n)
+l_1t = length(reads_5K_t)
+
+par(mfcol = c(1,1))
+plot(GC_5K[samp1],reads_5K_n[samp1],ylim = c(0,600),xlim = c(0.2,.75), cex = 0.5, pch=20)
+
+GC=GC_5K[1:l_1n]
+mod_1n = lm(reads_5K_n~bs(GC,deg = 3,knots = c(seq(0.25,0.6,0.025),0.65), Boundary.knots = c(min(GC),max(GC))),subset = (reads_5K_n>50 & reads_5K_n<600 ))
+
+# regression line
+pred_range = seq(0.2,0.75,0.01)
+resp_n = predict(mod_1n,list(GC=pred_range))
+lines(pred_range, resp_n,col = 4,lw=3)
+
+
+```
+
+
+### Fitting f(GC) for Tumor Sample
+
+```{r}
+GC=GC_5K[1:l_1t]
+subs_t = (reads_5K_t>50) & (reads_5K_t<550)
+#subs_t = (reads_5K_t>50)&(reads_5K_t<500)& (GC>0.45)
+knots_seq = c(seq(0.25,0.6,0.025),0.65)
+mod_1t = lm(reads_5K_t~bs(GC,deg = 3,knots = knots_seq),subset = subs_t)
+
+pred_range = seq(0.2,0.75,0.01)
+resp_t = predict(mod_1t,list(GC=pred_range))
+resp_n = predict(mod_1n,list(GC=pred_range))
+```
+
+```{r}
+
+par(mfcol = c(1,1))
+
+plot(GC_5K[samp1],reads_5K_t[samp1],ylim = c(0,600),xlim = c(0.2,.75), cex = 0.5, pch=20)
+
+lines(pred_range, resp_n,col = 4,lw=3)
+lines(pred_range, resp_t,col = 6,lw=3)
+legend("topright", legend = c("Healthy Sample", "Tumor Sample"), col = c("4", "6"), lty = 1, lwd = 2, pch = 20)
+
+
+```
+
+## One sample corrections (aka only GC & median correction)
+
+```{r}
+# take maximum with 0
+preds1n = pmax(predict(mod_1n,list(GC=GC_5K)),0)
+preds1t = pmax(predict(mod_1t,list(GC=GC_5K)),0)
+
+
+
+# One Sample with espilon, Normative
+eps = 1
+corrected_1n = fix_med(fix_gc_e(reads_5K_n, preds1n[1:l_1n], eps))
+uncorrected_1n = fix_med(fix_gc_e(reads_5K_n, rep(1,l_1n), eps))
+
+# One Sample with espilon, Tumor
+eps = 1
+corrected_1t = fix_gc_e(reads_5K_t, preds1t[1:l_1t], eps)
+uncorrected_1t = fix_gc_e(reads_5K_t, rep(1,l_1t), eps)
+
+gc_med_corrected_1t = fix_med(fix_gc_e(reads_5K_t, preds1t[1:l_1t], eps))
+gc_med_uncorrected_1t = fix_med(fix_gc_e(reads_5K_t, rep(1,l_1t), eps))
+
+```
+
+```{r}
+par(mfcol = c(2,2), mar = c(1,5,5,1))
+range_c = 5000:6000
+range_d = 15000:16000
+range_cd = c(range_c,range_d)
+
+plot_fixes = function(reads_dat, range1 = 5000:6000, range2 = 15000:16000, yla = "", xax="n", yli=c(0,2), c = 0.2, p = 20){
+  ranges = c(range1,range2)
+  plot(reads_dat[ranges], 
+     ylab = yla, xaxt = xax,
+     ylim = yli, cex = c, pch=p)
+abline(h=1,col=4, lwd = 1.5)
+abline(v=length(range1), col=6,lt = 2, lwd = 1.2)
+}
+
+plot_fixes(gc_med_uncorrected_1t, yla = "Before")
+
+mtext(side=3, line=0.35, cex=0.9, "Tumor Sample")
+
+plot_fixes(gc_med_corrected_1t, yla = "After")
+
+plot_fixes(uncorrected_1n)
+
+mtext(side=3, line=0.35, cex=0.9, "Healthy Sample")
+
+plot_fixes(corrected_1n)
+mtext(side = 3, line = -2, "GC Correction (One-Sample)",outer = TRUE)
+plot(1)
+
+```
+
+
+```{r}
+par(mfcol = c(2,1), mar = c(1,5,1,1))
+
+# Plot for Healthy
+plot(corrected_1n[range_cd], ylab = "Healthy",xaxt = "n",
+     main = "After GC Correction ('One Sample')", 
+     ylim = c(0,2), cex = 0.2, pch=20)
+abline(h=1, col=4, lwd = 1.5)
+
+# Plot for Tumor
+plot(gc_med_corrected_1t[range_cd], ylab = "Tumor",xaxt = "n",
+     ylim = c(0,2), cex = 0.2, pch=20)
+abline(h=1, col=4, lwd = 1.5)
+abline(v=700,col=2,lt = 2, lwd = 1.2)
+abline(v=750,col=2,lt = 2, lwd = 1.2)
+plot(1)
+
+```
+
+
+### Two sample corrections
+
+```{r}
+two_sample_w_gc = fix_med(fix_gc_e(corrected_1t, corrected_1n))
+two_sample_w_gc_e = fix_med(fix_2samp_e(corrected_1t, corrected_1n, 0.01))
+two_sample_wout_gc = fix_med(fix_2samp_e(uncorrected_1t, uncorrected_1n))
+two_sample_wout_gc_e = fix_med(fix_2samp_e(uncorrected_1t, uncorrected_1n, 0.01))
+
+par(mfcol = c(3,1),mar = c(5,2,5,2))
+plot(two_sample_w_gc[range_cd], xaxt = "n", 
+     xlab = "", main = "Three Fixes: Median, GC, Two-Sample w/ Epsilon",
+     ylim = c(0,2),cex = 0.2,pch=20)
+abline(h=1,col=4, lwd = 1.5)
+abline(v=1000,col=2,lt = 2, lwd = 1.2)
+
+plot(two_sample_wout_gc[range_cd],xaxt = "n",
+     xlab = "", main = "Median + Two-Sample w/ Epsilon",
+     ylim = c(0,2),cex = 0.2,pch=20)
+abline(h=1,col=4, lwd = 1.5)
+abline(v=1000,col=2,lt = 2, lwd = 1.2)
+
+plot(two_sample_wout_gc[range_cd],xaxt = "n",
+     xlab = "Reads Count per Bin Location (5K)",
+     main = "Median + Two-Sample (No Epsilon)",
+     ylim = c(0,2),cex = 0.2,pch=20)
+abline(h=1,col=4, lwd = 1.5)
+abline(v=1000,col=2,lt = 2, lwd = 1.2)
+
+plot(1)
+```
+
+```{r}
+trim = function(x,l,u){ pmax(pmin(x, u), l) }
+b_range= seq(0,3,0.04)
+#use_range = 1:49000
+use_range = range_cd
+
+par(mfrow = c(2,3),mar = c(2,5,2,0))
+
+# ONLY MEDIAN FIX
+trim_med_e_1n = trim(uncorrected_1n[use_range],0,3)
+hist(trim(uncorrected_1n[use_range],0,3),
+     ylim = c(0,2.5), ylab = "Median Fix Only",
+     breaks = b_range,freq = FALSE, main = "Normative Sample")
+abline(v=1,col=4, lwd = 1.5)
+abline(v=mean(trim_med_e_1n),col=2,lt = 2, lwd = 1.2)
+
+trim_med_e_1t = trim(gc_med_uncorrected_1t[use_range],0,3)
+hist(trim(gc_med_uncorrected_1t[use_range],0,3),
+     ylim = c(0,2.5), breaks = b_range, freq = FALSE, 
+     ylab = "", main = "Tumor Sample")
+abline(v=1,col=4, lwd = 1.5)
+abline(v=mean(trim_med_e_1t),col=2,lt = 2, lwd = 1.2)
+
+trim_med_e_both = trim(two_sample_wout_gc[use_range],0,3)
+hist(trim(two_sample_wout_gc[use_range],0,3),
+     ylim = c(0,2.5), breaks = b_range, freq = FALSE, 
+     ylab = "", main = "Both Samples")
+abline(v=1,col=4, lwd = 1.5)
+abline(v=mean(trim_med_e_both),col=2,lt = 2, lwd = 1.2)
+
+
+# MEDIAN + GC FIX
+trim_med_gc_e_1n = trim(corrected_1n[use_range],0,3)
+hist(trim_med_gc_e_1n,
+     ylim = c(0.0,4.0), ylab = "Median + GC Fix",
+     breaks = b_range,freq = FALSE,main = "")
+abline(v=1,col=4)
+abline(v=mean(trim_med_gc_e_1n),col=2,lt = 2, lwd = 1.2)
+
+trim_med_gc_e_1t = trim(gc_med_corrected_1t[use_range],0,3)
+hist(trim_med_gc_e_1t,
+     ylim = c(0.0,4.0), breaks = b_range,freq = FALSE,
+     ylab = "", main = "")
+abline(v=1,col=4)
+abline(v=mean(trim_med_gc_e_1t),col=2,lt = 2, lwd = 1.2)
+
+trim_med_gc_e_both = trim(two_sample_w_gc[use_range],0,3)
+hist(trim_med_gc_e_both,
+     ylim = c(0.0,4.0), breaks = b_range,freq = FALSE, 
+     ylab = "", main = "")
+abline(v=1,col=4, lwd = 1.5)
+abline(v=mean(trim_med_gc_e_both),col=2,lt = 2, lwd = 1.2)
+
+# Add legend
+legend(c(4,-4), legend = c("Expect Mean", "Actual Mean"),
+       col = c(4, 2), lwd = 3,
+       lty = 1, bty = "n")
+
+plot(1)
+
+```
+
+Another interesting region: 
+
+```{r}
+range_b = 1000:3001
+par(mfcol = c(3,1),mar = c(2,2,2,2))
+plot(range_b,two_sample_w_gc[range_b],
+     ylim = c(0,3.5),cex = 0.2,pch=20, main = "Two Samp +GC"
+       )
+abline(h=1,col=4)
+plot(range_b,two_sample_wout_gc[range_b], main = "Two Samp",
+     ylim = c(0,3.5),cex = 0.2,pch=20)
+abline(h=1,col=4)
+plot(range_b,gc_med_corrected_1t[range_b],main = "GC (aka One Samp)",
+     ylim = c(0,3.5),cex = 0.2,pch=20)
+abline(h=1,col=4)
+
+
+```
+
+
+If Y is small and f is small, the effect of adding an epsilon will move it to 1.

@@ -1,0 +1,317 @@
+---
+title: "Lab Task 4: Approx. Regression w/ Piecewise Polynomial Model"
+author: "Group 6"
+date: Sys.Date()
+output:
+  html_document:
+    code_folding: show
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+Group members:
+
+- Shawn Yakir , 315714980, shawnyakir@gmail.com
+- Sarah Levitz, 324673623, sarah.levitz@mail.huji.ac.il
+- Carmel Baris, 318455276, carmel.baris@mail.huji.ac.il 
+
+
+## Libraries
+
+```{r library, message=FALSE, warning=FALSE}
+library(segmented)
+library(data.table)
+
+```
+
+## Setting up environment & paths
+```{r setup}
+## ------------------------------------------------
+## ---- DEPENDENCIES AKA FILES REQUIRED
+## Make sure that all files are in the current working directory:
+## 1. chr1_bases.rda
+## 2. TCGA-13-0723-01A_lib2_all_chr1.forward
+## 3. helpers_file
+## 
+## Note that in this lecture we'll create and save a new file:
+## 4. reads_gc_20K.rda
+
+
+## ------------------------------------------------
+## ---- CLEAN ENVIRONMENT
+rm(list = ls())
+
+
+## ---- SET WORKING DIRECTORY
+dir_name = "~/Carmel/RProjects/Lab_Benjamini/data/"
+# dir_name = "/Users/alevi/Downloads/"
+# setwd(dir_name)
+# getwd() # validate
+
+
+## ------------------------------------------------
+## ---- LOAD HELPER FUNCTIONS
+helpers_file = file.path(dir_name, "help_funcs.R")
+source(helpers_file)
+helpers <- list(
+    loadRData = loadRData,
+    fitMet = fitMetrics,
+    rmvOut = removeOutliersPaired,
+    binBases = binBases)
+
+```
+
+## Loading data files 
+
+```{r warning=FALSE}
+
+## ------------------------------------------------
+## ---- LOAD FILE OF NUCLEO_BASES (A,T,C,G)
+bases_file = file.path(dir_name, "chr1_line.rda")
+chr1_bases = helpers$loadRData(bases_file) #like Lecture1
+
+
+## ------------------------------------------------
+## ---- LOAD FILE OF READS LOCATIONS (THAT START A FRAGMENT)
+  
+reads_file_all = file.path(dir_name,"TCGA-13-0723-01A_lib2_all_chr1.forward")
+chr1_reads = data.table::fread(reads_file_all) #like Lecture2
+colnames(chr1_reads) = c("Chrom","Loc","FragLen")   
+
+
+```
+
+
+## Preprocessing data 
+
+```{r message=FALSE, warning=FALSE}
+
+## chunk should not have eval = FALSE!!
+## o/w it messes up GC_20K
+
+nreads = nrow(chr1_reads)
+myLocations = as.numeric(chr1_reads$Loc)
+last_read = myLocations[nreads]
+
+binsize = 20000
+
+## ------------------------------------------------
+## ---- BINNING NUCLEO_BASES DATA
+##
+# per bin, count occurrences of each letter
+bases_20K = binBases(chr1_bases, last_read, binsize) 
+
+# per bin, sum occurrence counts of C & G only (GC content)
+GC_20K <<- bases_20K[, 3] + bases_20K[, 4] #store as global variable
+
+# convert GC_20K into percentages
+if(any(GC_20K>1)){ # This makes sure I don't repeat the command
+  GC_20K = GC_20K / binsize
+}
+
+## ------------------------------------------------
+## ---- BINNING READS COVERAGE DATA
+
+# per bin, calculate reads coverage 
+reads_20K = binReads(myLocations,binsize,last_read)
+save(reads_20K, GC_20K,file = file.path(dir_path=dir_name,"reads_gc_20K.rda"))
+
+# load data
+reads_file_20K = file.path(dir_name, "reads_gc_20K.rda")
+reads_gc_20K = helpers$loadRData(reads_file_20K)
+# access using `$`:
+#   GC_20K = reads_gc_20K$GC_20K
+#   reads_20K = reads_gc_20K$reads_20K
+
+
+
+## ------------------------------------------------
+## ---- CLEARING UP ENV
+rm("chr1_bases","chr1_reads") # remove from memory
+
+```
+
+
+
+## Remove outliers
+
+```{r}
+# Remove outliers from reads and GC content data
+cleaned_data = helpers$rmvOut(GC_20K, reads_20K)
+GC_20K_clean = cleaned_data$x
+reads_20K_clean = cleaned_data$y
+
+```
+
+
+
+
+
+## Q1: Segmented regression
+
+
+```{r fit}
+
+# Fit initial linear model
+simpl_lin_model = lm(reads_20K_clean ~ GC_20K_clean)
+
+# Using `segmented` package for piecewise regression
+seg_model = segmented(simpl_lin_model, seg.Z = ~GC_20K_clean, npsi = 2)
+
+# Extract breakpoints
+breakpoints = seg_model$psi[, "Est."]
+knot1 = breakpoints[[1]]
+knot2 = breakpoints[[2]]
+
+# Plot piecewise polynomial regression
+plot(GC_20K_clean, reads_20K_clean, pch = 16, cex = 0.5, col = rgb(0,0,0,0.5),
+     xlab = "GC Content (cleaned)", ylab = "Read Counts (cleaned)",
+     main = "Piecewise Polynomial Regression")
+
+# Add line of segmented model regression
+plot(seg_model, add = TRUE, col = "purple")
+
+# Plot knots for reference
+abline(v = c(knot1, knot2), lty = 2, col = "darkgray", lwd = 1.5)
+
+# Fit a piecewise linear model using I() notation
+pw_model_I <- lm(reads_20K_clean ~ 
+                          I(GC_20K_clean * (GC_20K_clean <= knot1)) +
+                          I(GC_20K_clean * ((GC_20K_clean > knot1) & (GC_20K_clean <= knot2))) +
+                          I(GC_20K_clean * (GC_20K_clean > knot2))
+                        )
+
+# Create new data for prediction using I() notation
+new_data_I <- data.frame(GC_20K_clean = seq(min(GC_20K_clean), max(GC_20K_clean), length.out = 1000))
+new_data_I$y_pred <- predict(pw_model_I, newdata = new_data_I)
+
+# Add predicted piecewise regression line using I() notation
+lines(new_data_I$GC_20K_clean, new_data_I$y_pred, col = "orange", lwd = 2)
+
+# Legend
+legend("topleft", legend = c("Segmented Package", "Manual Piecewise"), 
+       col = c("purple", "orange"), lwd = 2, cex = 0.7)
+
+```
+
+## Q2: Residuals vs Explanatory Variable
+Let's start by comparing the residuals of the piecewise polynomial model and the linear model. Ideally, residuals should be randomly distributed around zero without any discernible pattern.
+
+
+```{r}
+
+pred_seg = predict(seg_model)
+pred_pw = predict(pw_model_I)
+pred_lin = predict(simpl_lin_model)
+
+# Calculate residuals for seg model
+seg_res = reads_20K_clean - pred_seg
+pw_res = reads_20K_clean - pred_pw
+lin_res = reads_20K_clean - pred_lin
+
+par(mfrow = c(1, 2))  # Two plots in one row
+
+# Plot residuals for segmented model
+plot(GC_20K_clean, seg_res, pch = 16, cex = 0.5, col = rgb(0, 0, 0, 0.5),
+     ylim = c(min(pw_res),max(seg_res)),
+     xlab = "GC Content (cleaned)", ylab = "Residuals",
+     main = "Residuals of Segmented Model")
+abline(h = 0, col = "darkgray", lwd = 1.5)
+
+# Plot residuals for piecewise linear model
+plot(GC_20K_clean, pw_res, pch = 16, cex = 0.5, col = rgb(0, 0, 0, 0.5),
+     xlab = "GC Content (cleaned)", ylab = "Residuals",
+     main = "Residuals of Piecewise Polynomial Model")
+abline(h = 0, col = "darkgray", lwd = 1.5)
+
+# Reset plot layout
+par(mfrow = c(1, 1))
+
+```
+     
+## Bias Assessment
+The goal is to have residuals that are evenly distributed around zero (vertically) across all GC values. In the segmented model plotted on the left, the residuals are scattered randomly around zero, without any specific trend or pattern. Yet as seen in the residuals plot on the right-hand side, there is a noticeable pattern for GC values higher than 49.6%, indicating a bias. At circa 50-52% the model seems to systematically over-predict the read count, whereas above 52% the model tends to under-predict. 
+
+
+## Q3: Comparing to Simple Linear Regression
+Now, we calculate and compare Root Mean Squared Error, Mean Absolute Error and R-squared values for both models.
+
+```{r}
+
+# Helper function to compute regression metrics
+compute_metrics <- function(actual, predicted) {
+  mae = mean(abs(actual - predicted))
+  mse = mean((actual - predicted) ^ 2)
+  rss = sum((predicted - actual) ^ 2)
+  tss = sum((actual - mean(actual)) ^ 2)
+  r_squared = 1 - (rss / tss)
+  
+  return(list(MAE = mae, MSE = mse, R_squared = r_squared))
+}
+
+# Compute metrics
+metrics_lin <- compute_metrics(reads_20K_clean, pred_lin)
+metrics_pw <- compute_metrics(reads_20K_clean, pred_pw)
+
+# Combine metrics for comparison
+metrics_comparison = data.frame(
+  Model = c("Linear", "Piecewise"),
+  MAE = c(metrics_lin$MAE, metrics_pw$MAE),
+  MSE = c(metrics_lin$MSE, metrics_pw$MSE),
+  R_squared = c(metrics_lin$R_squared, metrics_pw$R_squared)
+)
+
+
+print(metrics_comparison)
+
+```
+
+Based on the visual comparison of residuals and numerical comparison metrics:
+
+The model using the `segmented` package shows more evenly distributed residuals around zero, indicating a potentially better fit than the linear or the quadratic models. The MSE (here we consider it to be like the MSPE) and R-squared metrics further support this indication, because higher R-squared is higher explainability and lower MSE means smaller deviations from the actual values. The same conclusion can be derived from the lower Mean Absolute Error, which is less sensitive to outliers compared to MSE and RMSE. 
+
+
+
+```{r}
+# Define quantiles for GC content
+gc_quantiles <- quantile(GC_20K_clean, probs = c(0, 0.25, 0.5, 0.75, 1))
+
+# Function to compute standard deviation of residuals within each quantile
+compute_residual_stats <- function(gc, residuals, quantiles) {
+  stats <- data.frame(
+    quantile = character(),
+    StdDev_Residuals = numeric()
+  )
+  for (i in 1:(length(quantiles) - 1)) {
+    mask <- (gc >= quantiles[i]) & (gc < quantiles[i + 1])
+    stddev_residuals <- sd(residuals[mask])
+    stats <- rbind(stats, data.frame(
+      quantile = paste0("Q", i),
+      StdDev_Residuals = stddev_residuals
+    ))
+  }
+  return(stats)
+}
+
+# Compute statistics for both models
+stats_lin <- compute_residual_stats(GC_20K_clean, pred_lin, gc_quantiles)
+stats_pred <- compute_residual_stats(GC_20K_clean, pw_res, gc_quantiles)
+colnames(stats_lin)[1] = "Quantile"
+colnames(stats_lin)[2] = "Std Dev Res (Linear)"
+colnames(stats_pred)[2] = "Std Dev Res (Piece Wise)"
+stats_lin[2] = round(stats_lin[2],2)
+stats_pred[2] = round(stats_pred[2],2)
+stats_compare = cbind(stats_lin,stats_pred[2])
+print(stats_compare)
+
+```
+
+
+## Conclusion
+The segmented model provides a better fit to the data compared to the linear model, as evidenced by:
+
+1. Lower standard deviations in residuals across most quantiles. \n
+2. A more consistent spread of residuals across the range of GC content. \n
+These results suggest that the segmented model improves the prediction quality by more accurately capturing the underlying relationship between GC content and read counts, particularly in regions with higher GC content where the linear model struggles.
+

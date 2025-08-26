@@ -1,0 +1,444 @@
+---
+title: "Lab Task 8"
+author: "Group 6"
+date: "`r format(Sys.time(), '%d/%m/%y')`"
+output:
+  html_document:
+    code_folding: show
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+Group members:
+
+- Shawn Yakir , 315714980,  shawn.yakir@mail.huji.ac.il
+- Sarah Levitz, 324673623, sarah.levitz@mail.huji.ac.il
+- Carmel Baris, 318455276, carmel.baris@mail.huji.ac.il 
+
+### Clean the environment
+```{r clean0}
+rm(list = ls())
+```
+
+### Libraries used
+
+```{r libraries}
+library('splines')
+```
+
+
+### Paths
+```{r paths}
+path = "~/Carmel/RProjects/Lab_Benjamini/data"
+# path = "/Users/alevi/Downloads/"
+# path = "\\Users\\shawn\\Desktop\\"
+```
+
+
+### Functions
+
+```{r correcting_funcs}
+
+### Median correction
+fix_med = function(samp) {
+  return(samp/median(samp,na.rm=TRUE))
+}
+
+### One sample correction
+fix_gc_e = function(samp, preds, eps=0) {
+  return((samp+eps)/(preds+eps))
+}
+
+
+### Two sample correction
+fix_2samp_e = function(tumor, healthy, eps=0) {
+  return((tumor+eps)/(healthy+eps))
+}
+
+```
+
+### Load data
+```{r dat}
+load(sprintf("%s/reads_100_A2.rda",path))
+load(sprintf("%s/reads_100_B2.rda",path))
+load(sprintf("%s/GC_100.rda",path))
+```
+
+### Binning
+```{r binning, warning=FALSE}
+binsize = 25
+
+chr2t_mat = matrix(reads_100_A2, nr = binsize)
+chr2n_mat = matrix(reads_100_B2, nr = binsize)
+GC_100=GC_100[1: (length(reads_100_A2)) ]
+gc_mat = matrix(GC_100,nr=binsize)
+
+reads_tumor = colSums(chr2t_mat)
+reads_healthy = colSums(chr2n_mat)
+GC = colMeans(gc_mat)
+
+```
+
+
+```{r clean1}
+rm("reads_100_A2","reads_100_B2","GC_100","chr2n_mat","chr2t_mat","gc_mat") # remove from memory
+```
+
+### Setup for Plots
+```{r setup_plots}
+# Colors
+col_tumor = rgb(.25,.25,.25,0.7)
+col_healthy = rgb(0,0,0,0.8)
+
+# Sample1
+set.seed(50)
+samp1 = sample(length(reads_healthy), 10000)
+
+# Prediction Range
+pred_range = seq(0.2,0.75,0.01)
+
+# Evenly Spaced Knots
+n_knots = 3
+knots = seq(min(GC), max(GC), length.out = n_knots + 2)[-c(1, n_knots + 2)]
+```
+
+### Spatial Distribution of Healthy vs Tumor Reads
+```{r spatial_tumor}
+
+par(mfcol = c(1,1))
+
+x.zoom5=1:length(reads_healthy)
+plot(x.zoom5, reads_healthy[x.zoom5],ylim = c(0,400),col=col_healthy, cex =0.5)
+lines(loess.smooth(x.zoom5,reads_healthy[x.zoom5], span=0.01),col=4,lw=3)
+
+x.zoom5=1:length(reads_tumor)
+plot(x.zoom5, reads_tumor[x.zoom5],ylim = c(0,400),col=col_tumor, cex =0.5)
+lines(loess.smooth(x.zoom5,reads_tumor[x.zoom5], span=0.01),col=6,lw=3)
+```
+
+```{r spatial_tumor_2.0}
+
+par(mfcol = c(1,1))
+
+x.zoom2=800:2400
+
+plot(x.zoom2, reads_healthy[x.zoom2],ylim = c(0,400),col=col_healthy, cex =0.5)
+lines(loess.smooth(x.zoom2, reads_healthy[x.zoom2], span=0.1),col=4,lw=3)
+
+plot(x.zoom2, reads_tumor[x.zoom2],ylim = c(0,400),col=col_tumor, cex =0.5)
+lines(loess.smooth(x.zoom2, reads_healthy[x.zoom2], span=0.1),col=4,lw=3)
+lines(loess.smooth(x.zoom2, reads_tumor[x.zoom2], span=0.1),col=6,lw=3)
+```
+
+### Fragments vs. GC Content (Tumor Sample)
+
+```{r reg_none}
+plot(GC[samp1], reads_tumor[samp1], cex = 0.4, pch = 20,  col = col_tumor,
+     main = "Tumor Sample vs. GC (%)", ylab = "Fragments Per Bin", xlab = "GC Content",
+     ylim = c(0, 400), xlim = c(0.2, 0.75))
+grid(nx = NULL, ny = NULL, col = "gray", lty = "dotted") # Add gridlines
+```
+
+
+### Linear Regression
+
+```{r reg_lm}
+reg_healthy_lm = lm(reads_healthy~GC,subset = reads_healthy>50 & reads_healthy<350)
+reg_tumor_lm = lm(reads_tumor~GC,subset = reads_tumor>50 & reads_tumor<400)
+
+resp_healthy_lm = predict(reg_healthy_lm,list(GC=pred_range))
+preds_healthy_lm = predict(reg_healthy_lm,list(GC=GC))
+
+response_tumor_lm = predict(reg_tumor_lm,list(GC=pred_range))
+preds_tumor_lm = predict(reg_tumor_lm,list(GC=GC))
+
+reg_tumor_lm2 = lm(reads_tumor~ 0 + GC, subset = reads_tumor>50 & reads_tumor<400)
+response_tumor_lm2 = predict(reg_tumor_lm2,list(GC=pred_range))
+
+plot(GC[samp1], reads_tumor[samp1], cex = 0.4, pch = 20,  col = col_tumor,
+     main = "Tumor Sample", ylab = "Fragments Per Bin", xlab = "GC Content",
+     ylim = c(0, 400), xlim = c(0.2, 0.75))
+grid(nx = NULL, ny = NULL, col = "gray", lty = "dotted") # Add gridlines
+lines(pred_range, response_tumor_lm,col = "maroon",lw=3)
+
+summary(reg_tumor_lm)
+
+```
+
+### Broken Sticks Regression
+
+```{r reg_pw}
+# Define knots
+#myknots <- c(0.415, 0.45, 0.54)
+myknots = seq(quantile(GC,0.1), quantile(GC,0.9), length.out = n_knots + 2)[-c(1,n_knots + 2)]
+pred_range <- seq(0.2, 0.75, 0.01)
+# Manual piecewise regression for tumor samples
+tumor_segment_1 <- lm(reads_tumor ~ GC, subset = (GC <= myknots[1] & reads_tumor > 50 & reads_tumor < 400))
+tumor_segment_2 <- lm(reads_tumor ~ GC, subset = (GC > myknots[1] & GC <= myknots[2] & reads_tumor > 50 & reads_tumor < 400))
+tumor_segment_3 <- lm(reads_tumor ~ GC, subset = (GC > myknots[2] & GC <= myknots[3] & reads_tumor > 50 & reads_tumor < 400))
+tumor_segment_4 <- lm(reads_tumor ~ GC, subset = (GC > myknots[3] & reads_tumor > 50 & reads_tumor < 400))
+
+# Predict responses for each segment for tumor samples
+resp_tumor_segment_1 <- predict(tumor_segment_1, list(GC = pred_range[pred_range <= myknots[1]]))
+resp_tumor_segment_2 <- predict(tumor_segment_2, list(GC = pred_range[pred_range > myknots[1] & pred_range <= myknots[2]]))
+resp_tumor_segment_3 <- predict(tumor_segment_3, list(GC = pred_range[pred_range > myknots[2] & pred_range <= myknots[3]]))
+resp_tumor_segment_4 <- predict(tumor_segment_4, list(GC = pred_range[pred_range > myknots[3]]))
+
+# Plot Tumor Sample with Manual Piecewise Regression
+plot(GC[samp1], reads_tumor[samp1], cex = 0.4, pch = 20, col = col_tumor,
+     main = "Tumor Sample - Manual Piecewise Regression", ylab = "Fragments Per Bin", xlab = "GC Content",
+     ylim = c(0, 400), xlim = c(0.2, 0.75))
+grid(nx = NULL, ny = NULL, col = "gray", lty = "dotted") # Add gridlines
+lines(pred_range[pred_range <= myknots[1]], resp_tumor_segment_1, col = "tan2", lwd = 3)
+lines(pred_range[pred_range > myknots[1] & pred_range <= myknots[2]], resp_tumor_segment_2, col = "tan2", lwd = 3)
+lines(pred_range[pred_range > myknots[2] & pred_range <= myknots[3]], resp_tumor_segment_3, col = "tan2", lwd = 3)
+lines(pred_range[pred_range > myknots[3]], resp_tumor_segment_4, col = "tan2", lwd = 3)
+abline(v = myknots, lty = 2, col = "darkblue", lwd = 1)
+
+summary(tumor_segment_1)
+summary(tumor_segment_2)
+summary(tumor_segment_3)
+summary(tumor_segment_4)
+
+```
+
+
+### B-Spline Regression
+
+```{r reg_bs}
+set.seed(50)
+samp1 = sample(length(reads_healthy), 10000)
+
+#myknots = c(0.1907, 0.3814, 0.5721)
+pred_range = seq(0.2, 0.75, 0.01)
+
+# Fit B-spline models
+reg_healthy_bs = lm(reads_healthy ~ bs(GC, degree =3, knots = myknots), subset = reads_healthy > 50 & reads_healthy < 350)
+reg_tumor_bs = lm(reads_tumor ~ bs(GC, degree = 3, knots = myknots), subset = (reads_tumor > 50) & (reads_tumor < 400))
+
+# Predict responses for B-spline models
+resp_healthy_bs = predict(reg_healthy_bs, list(GC = pred_range))
+preds_healthy_bs = predict(reg_healthy_bs, list(GC = GC))
+
+response_tumor_bs = predict(reg_tumor_bs, list(GC = pred_range))
+preds_tumor_bs = predict(reg_tumor_bs, list(GC = GC))
+
+# Plot Tumor Sample with B-Spline Regression
+plot(GC[samp1], reads_tumor[samp1], cex = 0.4, pch = 20, col = col_tumor,
+     main = "Tumor Sample", ylab = "Fragments Per Bin", xlab = "GC Content",
+     ylim = c(0, 400), xlim = c(0.2, 0.75))
+grid(nx = NULL, ny = NULL, col = "gray", lty = "dotted") # Add gridlines
+lines(pred_range, response_tumor_bs, col = "darkcyan", lwd = 3)
+abline(v = myknots, lty = 2, col = "darkblue", lwd = 1)
+summary(reg_tumor_bs)
+
+```
+
+```{r reg_all}
+plot(GC[samp1], reads_tumor[samp1], cex = 0.4, pch = 20, col = rgb(0.2,0.2,0.2,0.5),
+     main = "Tumor Sample", ylab = "Fragments Per Bin", xlab = "GC Content",
+     ylim = c(0, 400), xlim = c(0.2, 0.75))
+grid(nx = NULL, ny = NULL, col = "gray", lty = "dotted") # Add gridlines
+
+lines(pred_range, response_tumor_lm,col = "maroon",lw=2)
+lines(pred_range, response_tumor_bs,col = "darkcyan",lw=3)
+
+lines(pred_range[pred_range <= myknots[1]], resp_tumor_segment_1, col = "tan2", lwd = 3)
+lines(pred_range[pred_range > myknots[1] & pred_range <= myknots[2]], resp_tumor_segment_2, col = "tan2", lwd = 3)
+lines(pred_range[pred_range > myknots[2] & pred_range <= myknots[3]], resp_tumor_segment_3, col = "tan2", lwd = 3)
+lines(pred_range[pred_range > myknots[3]], resp_tumor_segment_4, col = "tan2", lwd = 2)
+
+
+```
+
+### Applying Estimation Corrections
+
+```{r fixes}
+# Median Fix Only (Tumor Sample)
+med_eps0 = fix_med(reads_tumor)
+
+# Median & GC Fix (Tumor Sample)
+med_gc_1samp_eps0.3 = fix_med(fix_gc_e(reads_tumor, preds_tumor_bs,0.3))
+
+# Median & GC & Two-Sample Fix
+gc_fixed_healthy = fix_gc_e(reads_healthy, preds_healthy_bs)
+gc_fixed_tumor = fix_gc_e(reads_tumor, preds_tumor_bs)
+med_gc_2samp_eps0.3 = fix_med(fix_2samp_e(gc_fixed_tumor, gc_fixed_healthy, 0.3))
+```
+
+### Region of Interest
+
+```{r region}
+loc2bin = function(v, bin_size){
+  return((v*1000000)/bin_size)}
+
+bins = loc2bin(c(25,35,75,80),2500)
+stiched_range = c(bins[1]:bins[2], bins[3]:bins[4])
+```
+
+### Plotting Fixes in Region of Interest
+
+```{r plot_fixes}
+par(mfrow=c(2,1), mar = c(4,4,2,2), oma = c(5,4,3,2))
+
+# Median Fix Only
+plot(med_eps0[stiched_range], 
+     main = "", ylab = "", xlab = "",
+     xaxt = "n",
+     ylim = c(0,2), xlim = c(0,6000),
+     cex = 0.45, pch=20, col = col_healthy)
+grid(nx = NULL, ny = NULL, col = "gray", lty = "dotted") # Add gridlines
+abline(h=1, col="royalblue", lwd = 3)
+abline(v=4000, col="darkblue", lt = 2, lwd = 1.4)
+abline(v=c(1420,1470), col="indianred2", lwd = 1.4)
+mtext("Median (eps = 0)", side = 3, cex = 1, col = col_tumor, line = 0.5)
+
+# Median & GC & 2Sample
+plot(med_gc_2samp_eps0.3[stiched_range], 
+     main = "", ylab = "", xlab = "",
+     xaxt = "n",
+     ylim = c(0,2), xlim = c(0,6000),
+     cex = 0.45, pch=20, col = col_healthy)
+grid(nx = NULL, ny = NULL, col = "gray", lty = "dotted") # Add gridlines
+abline(h=1, col="royalblue", lwd = 3)
+abline(v=4000, col="darkblue", lt = 2, lwd = 1.4)
+abline(v=c(1420,1470), col=6, lwd = 1.4)
+mtext("GC & Two-Samp & Median (eps = 0.3)", side = 3, cex = 1, col = col_tumor, line = 0.5)
+
+# Write text on outer margins for the combined plot
+mtext("Applying Estimation Fixes", outer = TRUE, side = 3, line = 1, font = 2, cex = 1)
+#mtext("Est. Number of Copies (a hat)", outer = TRUE, side = 2, line = 2, cex = 0.8)
+mtext("Selected Locations in Chrom1 (25M-35M, 75M-80M)", outer = TRUE, side = 1, line = 2)
+
+# Additional plot to prevent disappearing plots
+plot(1)
+
+
+```
+
+
+```{r plot_outliers}
+# Save plot to a PNG with increased height
+# Adjust height and width in pixels
+png("plot_with_increased_height.png", height = 1400, width = 700)
+
+# Basic plot with specified x and y limits
+plot(GC, reads_tumor, ylim = c(0, 1400), cex=0.7, pch=20, col=col_tumor)
+grid(nx = NULL, ny = NULL, col = "gray", lty = "dotted") # Add gridlines
+# Logical condition to identify points within the specified range
+non_outliers <- reads_tumor > 50 & reads_tumor < 400
+highlight_outside <- !(non_outliers)
+
+# Highlight points outside the specified range
+points(GC[highlight_outside], reads_tumor[highlight_outside], col = "indianred2")
+abline(h=c(50,400), col="darkblue", lty=2)
+
+# Close the PNG device
+dev.off()
+
+```
+
+
+
+### Marginal Distribution of Tumor Reads (Histogram)
+
+```{r hist_tumor}
+# Assuming reads_tumor is a vector of read counts per location
+
+# Define breaks for ranges of 100s and group values over 500
+breaks <- c(seq(0, 500, by = 100), Inf)
+labels <- c(paste(seq(0, 400, by = 100), seq(99, 499, by = 100), sep = "-"), "500+")
+
+# Part 1: Grouping read counts
+reads_grouped <- cut(reads_tumor, breaks = breaks, labels = labels, right = FALSE)
+
+# Part 2: Creating a histogram for the grouped data
+read_hist <- table(reads_grouped)
+
+# Function to format the values
+format_labels <- function(x) {
+  if (x >= 1e6) { return(paste0(round(x / 1e6, 2), "M")) }
+  if (x >= 1e3) { return(paste0(round(x / 1e3, 1), "K")) } 
+  else { return(as.character(x)) }
+}
+
+# Define y-axis limits
+y_lim <- c(0, max(read_hist) * 1.1)
+
+# Plot the histogram and get the bar midpoints
+bar_midpoints <- barplot(read_hist, ylim = y_lim, yaxt = "n", 
+                         main = "Tumor Sample",
+                         xlab = "Count of Fragments Per Bin", 
+                         ylab = "No. of Bins")
+
+# Format y-axis labels
+y_ticks <- axTicks(2)
+formatted_y_ticks <- sapply(y_ticks, format_labels)
+axis(2, at = y_ticks, labels = formatted_y_ticks)
+
+# Format histogram labels
+formatted_counts <- sapply(read_hist, format_labels)
+
+# Add formatted labels to the histogram, centered
+text(x = bar_midpoints, 
+     y = as.numeric(read_hist), 
+     labels = formatted_counts, 
+     pos = 3, cex = 0.75)
+```
+
+### Marginal Distribution of Healthy Reads (Histogram)
+```{r hist_healthy}
+# Define breaks for ranges of 100s and group values over 500
+breaks <- c(seq(0, 500, by = 100), Inf)
+labels <- c(paste(seq(0, 400, by = 100), seq(99, 499, by = 100), sep = "-"), "500+")
+
+# Part 1: Grouping read counts
+reads_grouped <- cut(reads_healthy, breaks = breaks, labels = labels, right = FALSE)
+
+# Part 2: Creating a histogram for the grouped data
+read_hist <- table(reads_grouped)
+
+# Function to format the values
+format_labels <- function(x) {
+  if (x >= 1e6) { return(paste0(round(x / 1e6, 2), "M")) }
+  if (x >= 1e3) { return(paste0(round(x / 1e3, 1), "K")) } 
+  else { return(as.character(x)) }
+}
+
+# Define y-axis limits
+y_lim <- c(0, max(read_hist) * 1.1)
+
+# Plot the histogram and get the bar midpoints
+bar_midpoints <- barplot(read_hist, ylim = y_lim, yaxt = "n", 
+                         main = "Healthy Sample",
+                         xlab = "Count of Fragments Per Bin", 
+                         ylab = "No. of Bins")
+
+# Format y-axis labels
+y_ticks <- axTicks(2)
+formatted_y_ticks <- sapply(y_ticks, format_labels)
+axis(2, at = y_ticks, labels = formatted_y_ticks)
+
+# Format histogram labels
+formatted_counts <- sapply(read_hist, format_labels)
+
+# Add formatted labels to the histogram, centered
+text(x = bar_midpoints, 
+     y = as.numeric(read_hist), 
+     labels = formatted_counts, 
+     pos = 3, cex = 0.75)
+```
+
+
+```{r poission_lambda}
+cat("Median No. of Fragments Per Bin (Tumor): ", median(reads_tumor), "\n")
+cat("Mean No. of Fragments Per Bin (Tumor): ", mean(reads_tumor), "\n\n")
+cat("Median No. of Fragments Per Bin (Healthy): ", median(reads_healthy), "\n")
+cat("Mean No. of Fragments Per Bin (Healthy): ", mean(reads_healthy), "\n")
+
+```
+
+
+
+

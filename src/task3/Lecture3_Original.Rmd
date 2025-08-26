@@ -1,0 +1,246 @@
+---
+title: "Lecture3"
+author: "Yuval Benjamini"
+date: "20 November 2016"
+output: html_document
+---
+
+```{r}
+if (!require('data.table')){
+  install.packages('data.table')
+  library('data.table')
+}
+library('tictoc')
+
+library(dplyr)
+```
+```{r}
+
+reads_file = '/Users/yuvalbenjamini/Library/CloudStorage/Dropbox/Courses/Lab/Lab_52568_16/DNAseq/Data/TCGA-13-0723-10B_lib2_all_chr1.forward'
+chr1_reads = fread(reads_file) 
+colnames(chr1_reads) = c("Chrom","Loc","FragLen")   
+
+
+```
+
+Here is a helper function for binning stuff. 
+At this point you should have a file of "helper functions" 
+that you call using `source("functions.R")`. 
+```{r}
+
+bin_reads = function(input, size){
+  output = numeric(ceiling(length(input)/size) )
+  dat = ceiling(input / size)
+  for (i in 1:length(dat)){
+    output[dat[i]] = output[dat[i]] + 1
+  }
+  output
+        
+}
+```
+
+# Uniform Poisson model
+
+We will study the uniform Poisson arriving from many continuous uniform variables. 
+In DNA-sequencing, the uniform process is descrete (the reads can be in locations
+1, 2, 3, ...). This will give us an identical process once we start binning stuff. 
+
+First, let us produce many instances of unifrom variables:
+```{r}
+set.seed(1)
+nsamp = 100000000
+max_samp = nsamp * 10
+unif_dat = runif(n = nsamp, 0,max_samp )
+s_dat = sort(unif_dat)
+```
+
+Let's take a look at the first few locations 
+
+```{r}
+plot(s_dat[1:1000],rep(1,1000), xlim = c(1,1000))
+```
+
+The intervals between uniform variables behave like an exponential variable:
+
+```{r}
+diffs = s_dat[2:nsamp] - s_dat[(1:nsamp-1)]
+hist(diffs,freq = FALSE)
+curve(dexp(x,rate = 1/10),add = TRUE)
+```
+
+Here the blue curve is the exponential distribution.
+In an exponential process the increments are independent
+
+
+We get the Poisson by counting occurrences in equal-size intervals 
+Here we take an interval of size $k$, so on average we will have 
+one occurrence per bin. 
+
+```{r}
+k = 10
+output = bin_reads(ceiling(s_dat), k)
+hist(output,(0:12)-0.5,freq = FALSE)
+
+points(0:12, dpois(lambda = 1.0,x = 0:10))
+```
+
+Taking a much smaller bin, we will get Bernoulli-like behaviour
+because we'll rarely see more than 1 per bin.
+
+```{r}
+k = 1
+output = bin_reads(ceiling(s_dat[1:1000000]), k)
+hist(output,(0:5)-0.5,freq = FALSE)
+
+points(0:4, dpois(lambda = 0.1,x = 0:4))
+```
+
+### Properties of the Poisson ( $X\sim Poisson(\lambda)$ ): 
+
+  1. Mean:  
+  $$E[X] = \lambda$$
+  2. Variance/ SD 
+  $$Var[X] = \lambda\,\,\, SD[X] = \sqrt{\lambda}$$
+
+Independent Poisson variables are additive:
+Consider $K$ independent Poisson variables $X_1,...,X_K \sim Poisson(\lambda)$,
+Then $X_1 + X_2 + ... + X_K \sim Poisson (K \cdot \lambda)$
+
+
+# An exponential process the increments are independent
+# Counting occurences in equal-size intervals we get a Poisson
+```{r}
+k = 1000
+output_1K = bin_reads(ceiling(s_dat), k)
+```
+
+```{r}
+range(output_1K)
+range(output_1K,na.rm = TRUE)
+hist(output_1K,seq(60,148,4),freq = FALSE)
+
+```
+
+So this still looks like a Poisson: 
+
+```{r}
+range(output_1K)
+range(output_1K,na.rm = TRUE)
+hist(output_1K,seq(61,149,4),freq = FALSE)
+pois_probs = dpois(x = 60:147, lambda = 1000/10)
+pois_probs_4s = rowMeans(matrix(pois_probs,byrow = TRUE,nc = 4))
+points(seq(62,147,4),pois_probs_4s)
+```
+
+
+## Comparing the Poisson model to coverage
+
+```{r}
+
+reads_file = '/Users/yuvalbenjamini/Library/CloudStorage/Dropbox/Courses/Lab/Lab_52568_16/DNAseq/Data/TCGA-13-0723-10B_lib2_all_chr1.forward'
+chr1_reads = fread(reads_file) 
+colnames(chr1_reads) = c("Chrom","Loc","FragLen")   
+
+beg_region = 1
+end_region = 10000000
+N = end_region-beg_region+1
+read_line = numeric(N)
+
+tic()
+first_read = min(which(chr1_reads$Loc >= beg_region)) 
+r = first_read
+tt = proc.time()
+while (chr1_reads$Loc[r] <= end_region){
+  read_line[chr1_reads$Loc[r]] = read_line[chr1_reads$Loc[r]]+1
+  r = r+1
+}
+toc()
+
+```
+
+```{r}
+read_hist = hist(read_line,breaks = 0:20-0.5)
+text(read_hist$mids,read_hist$counts,read_hist$counts,pos = 3,cex =0.5)
+# pos = 1,2,3,4 moves the value a bit to the bottom,left,top,right
+#    of the scheduled location. See ?text.
+
+```
+
+
+Is the distribution of reads uniform? 
+```{r}
+reg_lambda=sum(read_line)/length(read_line)     # in region
+?dpois
+dpois(0:20,lambda = reg_lambda) # very hard to see the probabilities
+
+obs_prob = read_hist$density
+model_prob = dpois(0:19,lambda = reg_lambda)
+plot(obs_prob, model_prob)
+abline(0,1)
+
+plot(log(obs_prob), log(model_prob))
+text(log(obs_prob), log(model_prob),0:19,pos=2)
+abline(0,1)
+# Or
+plot(log(obs_prob), log(model_prob),xlim = c(-90,0),ylim = c(-90,0))
+text(log(obs_prob), log(model_prob),0:19,pos=2)
+abline(0,1)
+```
+
+
+Preparing a coverage vector for bins of 5K...
+```{r}
+nreads = nrow(chr1_reads)
+last_read = chr1_reads$Loc[nreads]
+
+# Last bin
+N5K = ceiling(last_read/5000)
+
+reads_5K= numeric(N5K)
+for (r in 1:nrow(chr1_reads)){
+  # Need to check such dangerous lines...
+  bin5K = 1+floor((chr1_reads$Loc[r]-1)/5000) 
+  reads_5K[bin5K] = reads_5K[bin5K]+1 
+}
+# Check that these are correct
+reads_5K[1]
+chr1_reads[reads_5K[1]+c(-10:10),]
+```
+
+
+Identify outliers by looking at marginal distribution
+
+```{r}
+hist(reads_5K)
+# Can't see anything.
+boxplot(reads_5K)
+boxplot(reads_5K,ylim = c(0,5000))
+boxplot(reads_5K,ylim = c(0,5000),horizontal = TRUE)
+
+h = hist(pmin(reads_5K,1000),breaks = 100)
+```
+
+find outlier cutoffs:
+```{r}
+bottom_cut = 20
+top_cut = 300
+h = hist(pmin(reads_5K,1000),breaks = 100)
+abline(v=c(20,300),col="red")
+no_outlier = reads_5K>20 &reads_5K<300
+mean(no_outlier) #proportion of non-outlier
+
+# Estimate density of distribution body
+m_no_outliers =mean(reads_5K[no_outlier])
+h_no_out = hist(reads_5K[no_outlier],breaks=100)
+abline(v=m_no_outliers,col="red",lw=2)
+```
+
+```{r}
+# compute poisson probabilities and compare to obeserved probabilities...
+pois_probs = dpois(0:660,m_no_outliers)
+# Compare these to the probabilities from the bulk. 
+# What does this model imply for the probability of being between X_i in 100:109?
+sd(reads_5K[no_outlier],na.rm=TRUE)
+```
+
+
