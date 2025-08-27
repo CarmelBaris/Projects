@@ -1,26 +1,35 @@
-# RStudio settings
-.Rproj.user/
-
-# R history and workspace
-.Rhistory
-.RData
-
-# Output files
-output/
-
-# Data and large files
-class-vids/
-data/TCGA-*.*      # large genomics files
-data/reads_*.*      # read files
-data/GC_*.rda       # GC data
-
-# Figures, temporary files
-**/figure-html/
+# Figures and temporary files
 **/*.html
 **/*.png
 **/*.svg
+**/figure-html/       # RMD-generated figures
+
+# Documents and media
+**/*.pdf
+**/*.doc
+**/*.docx
+**/*.pptx
+**/*.mp3
+**/*.mp4
+
+# Data
+**/*.rda
+**/*.gz
+**/*.fastq
+
+# Large data folders
+**/class-vids/
+**/data/TCGA-*.*      # large genomics files
+**/data/reads_*.*     # read files
 
 # OS and editor files
-Thumbs.db
-.DS_Store
-*.lnk
+**/Thumbs.db
+**/.DS_Store
+**/*.lnk
+
+# RStudio and R project
+*.Rproj
+**/.Rproj.user/
+**/.Rhistory          # RStudio settings
+**/.RData             # R workspace
+**/output/            # R-generated output
