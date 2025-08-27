@@ -1,0 +1,201 @@
+---
+title: "SOL9"
+author: "Nofar Gabay"
+date: '2023-06-13'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(datasets)
+library(olsrr)
+library(tidyverse) 
+library(MASS)
+library(ggplot2)
+```
+
+### Q1
+##### a
+```{r}
+# load the data
+data = mtcars[, -which(names(mtcars) %in% c("am", "vs", "cyl", "gear", "carb"))]
+
+# glimpse on the data
+head(data)
+# descriptive statistics
+summary(data)
+
+cor(data) # disp, wt
+
+model = lm(mpg ~ disp + wt, data)
+summary(model)
+```
+
+
+##### b
+```{r}
+X <- as.matrix(cbind(rep(1,nrow(data)),data$disp, data$wt),nrow=nrow(data), ncol=ncol(data))
+G <- solve(t(X) %*% X)
+e <- resid(model)
+sqr_e <- t(e) %*% e
+n <- nrow(data)
+p <- 2
+s <- sqrt(sqr_e/(n-p-1))
+
+beta1 <- model$coefficients[2]
+beta2 <- model$coefficients[3]
+
+t1 <- beta1/(s*sqrt(G[2,2]))
+t2 <- beta2/(s*sqrt(G[3,3]))
+```
+
+
+##### c
+```{r}
+alpha <- 0.05
+crit_t <- qt((alpha/2), n-p-1)
+
+alpha_1 <- 0.01
+crit_t_1 <- qt((alpha_1/2), n-p-1)
+```
+
+
+##### d
+```{r}
+sigma <- sigma(model)
+
+lower <- (n-p-1)*sigma^2/qchisq(alpha/2, df = n-p-1, lower.tail = FALSE)
+upper <- (n-p-1)*sigma^2/qchisq(1-alpha/2, df = n-p-1, lower.tail = FALSE)
+
+conf_int <- sqrt(c(lower, upper))
+```
+
+
+##### e
+```{r}
+model2 <- lm(mpg ~ disp + drat + wt + qsec, data)
+summary(model2)
+
+# R squared higher
+```
+
+
+```{r}
+CI_function = function(alpha, beta_j, n, p, emp_var_j){
+  critic_val = qt(1 - alpha/2, df = n-p-1)
+
+  CI_L = beta_j - ((sqrt(emp_var_j)) * critic_val)
+  CI_R = beta_j + ((sqrt(emp_var_j)) * critic_val)
+  CI = c(CI_L, CI_R)
+  names(CI) = c("LEFT", "RIGHT")
+  return(CI)
+}
+```
+
+##### f
+```{r}
+Y = data$mpg
+x0_2 <- rep(1,length(Y))
+x_s <- data[, -c(1,3)]
+X2 <- cbind(x0_2, x_s)
+X2 <- as.matrix(X2)
+XtX_1 = solve(t(X2) %*% X2)
+
+e <- data$mpg - model2$fitted.values
+sigma2_hat <- t(e) %*% e / (32-4-1) # (n-p-1)
+beta_cov <- as.numeric(sigma2_hat) * XtX_1
+
+var_1 = diag(beta_cov)[2]
+var_3 = diag(beta_cov)[4]
+
+alpha_lst = c(0.005, 0.05, 0.2)
+
+for (i in alpha_lst) {
+  print(CI_function(i, model2$coefficients[2], length(data$mpg), 4, var_1))
+  print(CI_function(i, model2$coefficients[4], length(data$mpg), 4, var_3))
+}
+
+# beta 3 CI not including zero, for all alpha's
+```
+
+
+##### g
+```{r}
+T_stat <- model2$coefficients / sqrt(diag(beta_cov))
+
+p_val = 2 * (1- pt(abs(T_stat), df = (32-4-1)))
+
+# the same as p values in lm() model
+```
+
+
+
+### Q4
+```{r}
+fish <- read.csv("C:/Users/nofar/Desktop/Fish.csv")
+
+head(fish)
+names(fish)[1] <-  "Species" # adjust variable name
+```
+
+```{r}
+# a: description of the variables
+summary(fish)
+# Species is a categorical variable with 7 possible values
+
+# b: bar-plot
+ggplot(data= fish,aes(x=Species)) + geom_bar()
+
+```
+
+```{r}
+# c : Yes. Species should be broken into 7 binary variables,
+# only 6 of which should be included in the model. The omitted one is the "basis" for beta_0.
+
+Bream_ind = which(fish$Species == "Bream")
+Roach_ind = which(fish$Species == "Roach")
+Perch_ind = which(fish$Species == "Perch")
+Parkki_ind = which(fish$Species == "Parkki")
+Smelt_ind = which(fish$Species == "Smelt")
+Pike_ind = which(fish$Species == "Pike")
+
+vec_Bream = rep(0, length(fish$Species))
+vec_Bream[Bream_ind] = 1
+fish[,"Bream"] = vec_Bream
+
+vec_Roach = rep(0, length(fish$Species))
+vec_Roach[Roach_ind] = 1
+fish[,"Roach"] = vec_Roach
+
+vec_Perch = rep(0, length(fish$Species))
+vec_Perch[Perch_ind] = 1
+fish[,"Perch"] = vec_Perch
+
+vec_Parkki = rep(0, length(fish$Species))
+vec_Parkki[Parkki_ind] = 1
+fish[,"Parkki"] = vec_Parkki
+
+vec_Smelt = rep(0, length(fish$Species))
+vec_Smelt[Smelt_ind] = 1
+fish[,"Smelt"] = vec_Smelt
+
+vec_Pike = rep(0, length(fish$Species))
+vec_Pike[Pike_ind] = 1
+fish[,"Pike"] = vec_Pike
+
+fish = fish[, -1]
+
+
+# d: build a model
+
+model <- lm(Weight ~. , data = fish)
+summary(model)
+
+# e: Species.Pike and Species.Smelt, this indicates that fish from those species have different weights than other species, given the same values of other parameters. 
+# Note that Whitefish is our baseline hence omitted. Note that if you chose other basis, you could have got other significant Species. 
+# Length 1 is also significant. Length2 is not for alpha 0.05 but seems to be important since it is for alpha=0.082.
+
+# f: No since the intercept beta_0 contain other information then Whitefish category.
+
+# g: beta_j of the other fish categories is the effect of the fish type in comparison to Whitefish (the difference in intercept level)
+```

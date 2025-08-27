@@ -1,0 +1,404 @@
+---
+title: "Analysis of *Spotify* Attributes for Audio Tracks"
+author: "Sigal Falk, ID 206682031 & Carmel Baris, ID 318455276"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    theme:
+      version: 4
+urlcolor: blue
+---
+
+```{=html}
+<style type="text/css">
+   .main-container {max-width: 77%; overflow-y:auto}
+   .row {display: flex;}
+   .column {flex: 50%;}
+
+body{ /* Normal  */
+      font-size: 14px;
+  }
+td {  /* Table  */
+  font-size: 12px;
+  
+}
+h1.title {
+  font-size: 32px;
+  color: DarkRed;
+}
+
+h3 { /* Header 3 */
+  font-size: 22px;
+  color: DarkGray;
+
+}
+
+h4 { /* Header 4 */
+  font-size: 18px;
+  color: DarkGray;
+}
+
+pre { /* Code block - determines code spacing between lines */
+    font-size: 14px;
+}
+
+</style>
+```
+
+------------------------------------------------------------------------
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# ++++++++++++++++++++++++ #
+# INSTALLING DEPENDENCIES
+# ++++++++++++++++++++++++ #
+#install required only once per user
+
+
+# EnvStats::install.packages("EnvStats")
+# docstring::install.packages("docstring")
+# kableExtra::install.packages("kableExtra")
+# dplyr::install.packages("dplyr")
+# tidyverse::install.packages("tidyverse")
+# tinytex::install_tinytex()
+
+# ++++++++++++++++++++++++ #
+# LOADING DEPENDENCIES
+# ++++++++++++++++++++++++ #
+library(tinytex)
+library(knitr)
+library(EnvStats)
+library(docstring)
+# library(dplyr)
+# library(tidyverse)
+
+# ++++++++++++++++++++++++ # 
+# PREPARING THE DATA
+# ++++++++++++++++++++++++ #
+
+#read data
+songs <- read.csv("../../data/mine/spotify1921to2020.csv")
+dance.origin <- songs$danceability
+valence.origin <- songs$valence
+```
+
+### Chosen Dataset
+
+Our dataset[^1] includes Spotify metadata for over 170K songs dated from 1921 till 2020. In our analysis we focused solely on the years 2019-2020 and on two continuous attributes: Valence Index (abbr. VI), which determines the musical positiveness conveyed by a track; and Danceability Index (abbr. DI), which determines the suitability of the song track for dancing. Both attributes range on a scale from 0.0 to 0.1 and are determined by Spotify's internal logic ("black-box" values).
+
+[^1]: Dataset ID: [babarory/spotify-dataset-1921-2020](https://data.world/babarory/spotify-dataset-1921-2020), owned by Baptiste Mansire on Data.world, CSV format, last updated on February 5, 2021.
+
+
+```{r CLeanup, echo=FALSE}
+#before CLeanup
+total.origin <- length(dance.origin)
+
+#only danceable songs from years 2019 and 2020
+songs.new <- subset(x=songs, subset=c(dance.origin>0 #danceable
+           & songs$year > 2018 & songs$year < 2021)) #2019 to 2020
+two_years <- length(songs.new)
+dance <- songs.new$danceability
+valence <- songs.new$valence
+removed <- total.origin - length(dance) # number of songs removed
+```
+
+In accordance with our previous report, we have chosen to remove `r format(removed, big.mark=",")` records of missing data (out of `r format(two_years, big.mark=",")` in total).
+
+```{r regression, results=FALSE, echo=FALSE, fig.height = 4}
+#standard deviations
+sd_dance <- sd(dance)
+sd_valence <- sd(valence)
+```
+
+Our previous report has also shown that the VI has a symmetric normal distribution, whereas the DI has a slightly negatively skewed (left-skewed) normal distribution.
+
+## Estimating Population Parameters of *DI* Distribution
+
+#### Max Likelihood Point Estimators
+
+```{r point_estimators, echo=FALSE, results='asis', warning=FALSE}
+
+MLEstVariance <- function(
+    samples, mu = mean(samples), n=length(samples)){
+  #' Calculates maximum likelihood estimator for variance
+  #' 
+  #' @param samples given list of samples
+  #' @param mu MLE of expectancy, default is normally distributed and therefore MLE mu is the mean
+  #' @param n number of samples
+
+  squared.dists = c()
+  for(sample in samples){
+    squared.dists = c(squared.dists, (sample - mu)^2)
+    }
+  sum.dists = Reduce('+', squared.dists) # sum all elements in list `distances`
+  return(sum.dists/n)
+}
+
+
+
+#MOM = Method Of Moments
+#MLE = Maximum Likelihood Estimator
+
+print(paste0('MLE for mu: ', round(mean(dance), 3)))
+print(paste0('MLE for variance: ', 
+             round(MLEstVariance(samples = dance),3)))
+
+```
+
+
+#### Question 1a
+
+```{r point_estimators, echo=FALSE, warning=FALSE}
+
+MOMomentsVariance <- function(samples){
+  #' Calculates maximum likelihood estimator for variance
+  #' 
+  #' @param samples given list of samples
+
+  squared.samples = c()
+  for(sample in samples){
+    squared.samples = c(squared.samples, (sample)^2)
+    }
+  
+  mom.var = mean(squared.samples) - (mean(samples))^2
+  
+  return(mom.var)
+}
+
+μ.dance.mom <- round(mean(dance), 3)
+σ.dance.mom <- round(sqrt(MOMomentsVariance(dance)), 3)
+
+μ.dance.mom
+σ.dance.mom
+
+```
+
+```{r mom_normal, echo=FALSE}
+print(paste0('MOM estimator for expectancy of the Danceability Index (μ of Y variable): ', ))
+print(paste0('MOM for variance of the Danceability Index (Y variable): ', round(MOMomentsVariance(samples = dance),3)))
+```
+
+
+#### Question 1b
+```{r mom_normal, echo=FALSE}
+
+DistFromMin <- function(samples){
+  #' Creates vector of the distance of each sample from the minimal value in the survey
+  #' 
+  #' @param samples given list of samples
+
+  m = min(samples)
+  
+  dist.from.min = c()
+  
+  for(sample in samples){
+    dist.from.min = c(dist.from.min, (sample-m)) #adds dist to vector
+  }
+  
+  return(dist.from.min)
+}
+
+```
+
+Assuming that W~Gamma(α, λ)
+
+```{r w, echo=FALSE}
+
+#Method of Moments
+W <- DistFromMin(samples = valence)
+λ.mom <- mean(W)/ MOMomentsVariance(W)
+α.mom <- λ.mom * mean(W)
+
+w.mom.estimators <- egamma(W, method='mme', ci = FALSE)$parameters
+λ.mom0 <- 1/w.mom.estimators[2]
+α.mom0 <- w.mom.estimators[1]
+
+
+#Max Likelihood Estimator
+w.mle.estimators <- egamma(W, method='mle', ci = FALSE)$parameters
+λ.mle <- 1/w.mle.estimators[2]
+α.mle <- w.mle.estimators[1]
+
+
+```
+
+#### Question 1c
+```{r quantiles}
+qnorm(c(0.1, 0.5, 0.75, 0.9), mean=μ.dance.mom, sd=σ.dance.mom) #Y
+qgamma(c(0.1, 0.5, 0.75, 0.9), shape=α.mom, rate=λ.mom) #W
+```
+
+#### Question 1d
+```{r empirical_quantiles}
+quantile(x=dance, probs=c(0.1, 0.5, 0.75, 0.9)) #Y
+pnorm(c(0.1, 0.5, 0.75, 0.9), mean=μ.dance.mom, sd=σ.dance.mom) #Y
+
+quantile(x=W, probs=c(0.1, 0.5, 0.75, 0.9)) #W
+pgamma(c(0.1, 0.5, 0.75, 0.9), shape=α.mom, rate=λ.mom) #W
+
+```
+
+#### Question 2: CI of expectancy(dance) = μ(Y)
+```{r, echo=FALSE, warning=FALSE}
+
+VarianceToSd <- function(x, is_sd=T){
+  #' Helper function
+  #' 
+  #' @param x given variance
+
+  if (is_sd == F){x = sqrt(x)}
+  return(x)
+}
+
+```
+
+```{r CoverageProbZ}
+CoverageProb<-function(CL, distr='z', n=NULL){
+  #' Calculates requested coverage probability of a confidence interval (CI).
+  #' i.e. What are the odds that the real parameter resides within our CI?
+  #' 
+  #' @param CL required Confidence Level, 1-α
+  #' @param distr which accumulative distribution to use
+  #'      'z' standard normal-distribution (default)
+  #'      't' Student's t-distribution
+
+  quantile.α <- 0.5*(1+CL) #1-α/2
+  if (distr=='z'){return(qnorm(quantile.α))}
+  else if (distr=='t'){return(qt(quantile.α),(n-1))} #quantile of estimated var
+}
+```
+
+
+```{r}
+#++++++++++++++++++++++++++++++++++++++++
+rangeConfIntervalZ<-function(n, CL, avg, sd, is_sd=T){
+  #' CI for Normal distribution with given variance
+  #'
+  #' The Confidence Interval is calculated using the Z table, i.e.
+  #' the cumulative probability function of the standardized norm distr. 
+  #'
+  #' @param n number of samples
+  #' @param CL required Confidence Level, 1-α
+  #' @param avg mean of all samples, as the expectancy's estimator 
+  #' @param sd given standard deviation
+  #' @param is_sd F when given variance, otherwise will be treated as sd 
+
+  VarianceToSd(sd,is_sd)
+  
+  z=CoverageProb(CL, "z")
+  
+  cat("Confidence interval for a confidence level of:",paste0(CL*100,"%"))
+  cat("\n lower bound (left border): ", avg-z*(sd/sqrt(n)))
+  cat("\n upper bound (right border): ", avg+z*(sd/sqrt(n)))
+  cat("\n length is :" , 2*z*sd/sqrt(n))
+}
+
+#run example:
+rangeConfIntervalZ(n=10 ,sd=12.9 ,CL=0.92,avg=75 ,is_sd=F)
+
+
+#++++++++++++++++++++++++++++++++++++++++
+TConfIntervalForExp<-function(n, sd, CL, avg, is_sd=T, with_txt=F){
+  #when given the variance enter F, otherwise will be treated as sd
+  #' CI for Normal distribution with unknown variance
+  #'
+  #' The Confidence Interval is calculated using the T distribution
+  #'
+  #' @param n number of samples
+  #' @param p required Confidence Level, 1-α
+  #' @param avg mean of all samples, as the expectancy's estimator 
+  #' @param sd estimate of standard deviation
+  #' @param is_sd F when given variance, otherwise will be treated as sd 
+  
+  VarianceToSd(sd,is_sd)
+  
+  t=CoverageProb(CL, "t", n)
+
+  if (with_txt == F){return(
+    c(avg-t*sd/sqrt(n), #lower bound (left border)
+      avg+t*sd/sqrt(n), #upper bound (right border)
+      2*t*sd/sqrt(n) #length
+      )
+  )}
+  
+  lower <- avg-t*(sd/sqrt(n))
+  upper <- avg-t*(sd/sqrt(n))
+
+  cat("Confidence interval for a confidence level of:",paste0(p*100,"%"))
+  cat("\n lower bound (left border): ", lower)
+  cat("\n upper bound (right border): ", avg+t*sd/sqrt(n))
+  cat("\n length is: " , 2*t*sd/sqrt(n))
+  
+}
+
+```
+
+
+```{r ci_exp_dance, echo=FALSE}
+
+msg="When using the unbiased estimator for variance of Danceability Index, we get the following:"
+
+
+ci.unknown.s <- TConfIntervalForExp(n=length(dance), sd=σ.dance.mom, p=0.97, avg=mean(dance), is_sd=T, with_txt=T)
+
+# 
+# interval = paste(msg, 
+#                  ci.unknown.s[1], 
+#                  ci.unknown.s[2], 
+#                  ci.unknown.s[3], 
+#                  sep="\n")
+# 
+# cat(interval[1])
+
+
+
+
+```
+
+
+### Question 2: CI of var(dance) 
+
+```{r ci_var_dance, echo=FALSE}
+
+Expectancy<-function(samples, CL, exp_known=F, sd=NULL){
+}
+
+CIforVar<-function(samples, CL, exp_known=F, sd=NULL){
+  #' Confidence Interval for variance of a normally distributed survey.
+  #'
+  #' The Confidence Interval is calculated using the T distribution
+  #'
+  #' @param samples
+  #' @param CL required Confidence Level, 1-α
+  #' @param exp_known known expectancy ('T') or estimated ('F', default) 
+  #' @param is_sd F when given variance, otherwise will be treated as sd 
+  
+  VarianceToSd(sd,is_sd)
+  n=length(samples)
+  quantile.low <- 0.5*(1+CL) #1-α/2
+  quantile.up <- 1-quantile.lower #α/2
+
+  if (exp_known == F){v=var(weight)} #s^2
+  else {v=σ^2}
+  
+  lower <- (n-1) * v / qchisq(quantile.low, (n-1))
+  upper <- (n-1) * v / qchisq(quantile.up, (n-1))
+
+  cat("Confidence interval for a confidence level of:",paste0(p*100,"%"))
+  cat("\n lower bound (left border): ", lower)
+  cat("\n upper bound (right border): ", upper)
+  
+}
+
+
+
+
+
+```
+
+
+
+
+
+\pagebreak

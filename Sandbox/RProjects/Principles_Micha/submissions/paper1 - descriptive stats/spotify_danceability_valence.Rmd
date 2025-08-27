@@ -1,0 +1,279 @@
+---
+title: "Analysis of *Spotify* Attributes for Audio Tracks"
+author: "Sigal Falk, ID 206682031 & Carmel Baris, ID 318455276"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    theme:
+      version: 4
+urlcolor: blue
+---
+
+```{=html}
+<style type="text/css">
+   .main-container {max-width: 77%; overflow-y:auto}
+   .row {display: flex;}
+   .column {flex: 50%;}
+
+body{ /* Normal  */
+      font-size: 12px;
+  }
+td {  /* Table  */
+  font-size: 12px;
+
+}
+h1.title {
+  font-size: 32px;
+  color: DarkRed;
+}
+
+h3 { /* Header 3 */
+  font-size: 22px;
+  color: DarkGray;
+
+}
+
+h4 { /* Header 4 */
+  font-size: 18px;
+  color: DarkGray;
+}
+
+pre { /* Code block - determines code spacing between lines */
+    font-size: 12px;
+}
+
+</style>```
+------------------------------------------------------------------------
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# ++++++++++++++++++++++++ #
+# INSTALLING DEPENDENCIES
+# ++++++++++++++++++++++++ #
+#install required only once per user
+
+
+# kableExtra::install.packages("kableExtra")
+# dplyr::install.packages("dplyr")
+# tidyverse::install.packages("tidyverse")
+# tinytex::install_tinytex()
+
+# ++++++++++++++++++++++++ #
+# LOADING DEPENDENCIES
+# ++++++++++++++++++++++++ #
+library(tinytex)
+library(knitr)
+# library(dplyr)
+# library(tidyverse)
+
+# ++++++++++++++++++++++++ # 
+# PREPARING THE DATA
+# ++++++++++++++++++++++++ #
+
+#read data
+songs <- read.csv("../../data/mine/spotify1921to2020.csv")
+dance.origin <- songs$danceability
+valence.origin <- songs$valence
+```
+
+### Chosen Dataset
+
+The Swedish company, *Spotify*, is an audio streaming and media services provider. Its digital services include a public REST-API which reveals the company's records of artists, albums, playlists, and songs. Specifically, the Track's Audio Features endpoint^[[Get Tracks' Audio Features](https://developer.spotify.com/documentation/web-api/reference/#/operations/get-several-audio-features), Web API Reference, Spotify for Developers.] provides quantitative attributes for each requested song. We selected a dataset^[Dataset ID: [babarory/spotify-dataset-1921-2020](https://data.world/babarory/spotify-dataset-1921-2020), owned by Baptiste Mansire on Data.world, CSV format, last updated on February 5, 2021.] based on this endpoint, which includes over 170K songs dated from 1921 till 2020. In our analysis we focused solely on the years 2019-2020 and on two attributes:
+
+A. **Valence** index ranging from 0.0 to 0.1 and which describes the musical positiveness conveyed by a track. An audio track ranked high in terms of valence is considered to convey more positive emotions (e.g. happy, cheerful, euphoric), whereas tracks with low valence are considered to convey more negative emotions (e.g. sad, depressed, angry).
+
+B. **Danceability** index, which describes the suitability of the song track for dancing and is based on the combination of several musical elements including rhythm, rhythm stability, the intensity of the music beats, and the general regularity of the audio track. The index ranges from 0.0 which describes an audio track that is unsuitable for dancing, to 1.0 which refers to a track that can be danced to with great ease.
+
+We should note that both attributes are internal to *Spotify*'s databases and services, meaning they are not based on a known standard and therefore don't use publicly recognized measuring units. In this report we'll refer to these attributes as Valence Index (abbr. VI) and Danceability Index (DI).
+
+We now proceed to analyse the data at hand.
+
+### Measures of Central Location and Dispersion
+
+<div class = "row">
+<div class = "column">
+
+##### Danceability Index
+```{r echo=FALSE}
+print(summary(dance.origin), digits=3)
+```
+</div>
+
+<div class = "column">
+
+##### Valence Index
+```{r echo=FALSE}
+print(summary(valence.origin), digits=3)
+```
+</div>
+</div>
+
+Above, the minimal value for both DI and VI is 0.0, giving us reason to believe our dataset may include records with missing data. A quick survey of the CSV file itself confirms our suspicion. To refrain from diverting our attention, we have decided to exclude these records from our current report by filtering out all songs that have a DI of zero.
+
+```{r cleanup, echo=FALSE}
+#before cleanup
+total.origin <- length(dance.origin)
+
+#only danceable songs from years 2019 and 2020
+songs.new <- subset(x=songs, subset=c(dance.origin>0 #danceable
+           & songs$year > 2018 & songs$year < 2021)) #2019 to 2020
+dance <- songs.new$danceability
+valence <- songs.new$valence
+removed <- total.origin - length(dance) # number of songs removed
+```
+
+Having removed `r format(removed, big.mark=",")` records, we recalculate the descriptive statistics for DI and VI:
+
+<div class = "row">
+<div class = "column">
+
+##### Danceability Index
+```{r echo=FALSE}
+print(summary(dance), digits=3)
+```
+</div>
+
+<div class = "column">
+
+##### Valence Index
+```{r echo=FALSE}
+print(summary(valence), digits=5)
+```
+</div>
+</div>
+
+### Charts
+
+In this section, we turn to some charts that will further help us understand our data.
+
+First, we use a histogram to review the distribution of each audio attribute.
+
+```{r plots, echo=FALSE, results='hide', fig.show="hold", out.width="50%"}
+print(hist(dance, breaks = 50))
+print(hist(valence, breaks = 50))
+```
+
+We see that the VI has a symmetric normal distribution, evident also from the brief statistics from earlier, in which the median and mean were nearly identical (0.485 versus 0.481, respectively). The DI, on the other hand, has a slightly negatively skewed (left-skewed) distribution, i.e. its extreme values are concentrated on the lower end of the index. This aligns with the relatively high values of its first quantile (0.5 DI) and of its third quantile (0.8 DI), which indicate that most of the songs in our dataset are significantly suitable for dancing.
+
+```{r standardDeviations, echo=FALSE}
+sd_dance <- sd(dance)
+sd_valence <- sd(valence)
+```
+
+The standard deviations in the Valence Index and in the Danceability Index are $SD_{valence}=$ `r round(sd_valence, 3)` and $SD_{dance}=$ `r round(sd_dance, 3)`, respectively.
+
+
+\pagebreak
+
+### Linear Regression Model
+
+We are interested in investigating the relationship between the VI as a predictor variable, and the DI as a response variable. According to our hypothesis, if a song conveys relatively positive emotions (higher valence) it will also be easier to dance to; in opposition, it will be harder to dance to a song conveying negative emotions. To test our hypothesis, we'll create a scatter plot describing how much the Danceability Index changes with respect to changes in the Valence Index.
+
+```{r regression, results=FALSE, echo=FALSE, fig.height = 4}
+# Scatter plot (be patient, may run slowly):
+print(plot(valence,dance,pch=20, col='gray')) #pch is graph's markers
+abline(v=mean(valence),col="#909196") #valence index units
+abline(h=mean(dance),col="#429ef5") #danceability index units
+
+#Observing the plot, we assume a positive correlation
+cor <- cor(valence, dance)
+cov <- cov(valence, dance)
+
+#Linear regression line:
+fit.VD <- lm(dance ~ valence)
+sumfit.VD <- summary(fit.VD)
+abline(fit.VD,col="red")
+
+# the fit.VD object includes info about regression such as
+# coefficients, residuals, fitted values. access with fit.VD$ & tab
+
+lm(formula = dance ~ valence)
+a.origin<-fit.VD$coefficients[2]
+b.origin<-fit.VD$coefficients[1]
+a <- a.origin
+b <- b.origin
+```
+
+To the plot we added indicators of the average attribute values (gray for VI, blue for DI), as well as a least-squares linear regression line (red) which marks the observations that are closest to the average. 
+Let's take a closer look at the coefficients of the regression line:
+
+$\hat a =$ `r round(a, 3)` is the line's slope and describes the growth in Danceability Index units, if the song's Valence increases by one VI unit.
+
+$\hat b =$ `r round(b, 3)` is the line's intercept and describes the size of a song's Danceability Index, when the song's Valence Index isn't taken into consideration (as it reaches a negligible value). In other words, a song's basic DI score is `r round(a, 3)`, and it increases with every additional VI unit.
+
+
+### Evaluating Goodness of Prediction
+
+Based on our sampled observations, we want to get an idea of the precision rate of our simplified linear regression model ($\hat y = \hat a x + \hat b$) using the following estimators.
+
+
+```{r  outliers, echo=FALSE, results='hide'}
+#retrieve residual value (dist from regression line) for each data point
+errs <- sumfit.VD$residuals
+err.max <- max(abs(errs))
+
+#select only interesting columns
+songs.outliers <- subset(songs.new,          
+                         select=c(name, valence, danceability))
+
+#add new colunm with predicted value of each outlier
+songs.outliers$predictions = songs.outliers$valence*a+b
+
+#add new column with residual of each outlier
+songs.outliers$residuals = errs
+
+#outlier threshold
+threshold <- quantile(abs(songs.outliers$residuals), 0.999)
+
+#select only data points above threshold
+songs.outliers <- subset(songs.outliers, abs(errs)>threshold)
+
+#extract rmse
+rmse <- round(sumfit.VD$sigma, 4)
+
+#extract r-squared
+r.squared <- round(sumfit.VD$r.squared, 3)
+
+```
+
+
+##### Root-Mean-Square Error (RMSE)
+
+```{r, include=FALSE}
+#RMSE <=> residual standard error <=> SD(errs) <=> sqrt(Var(errs))
+```
+
+$\text {RMSE}=$ `r rmse` DI units. Compared to the general standard deviations of our attributes, the RMSE estimation is relatively low, indicating that most observations in our sample deviate only slightly from the average Danceability Index score (the regression line). This suggests that our model exhibits a consistent relationship between the VI predictors and their respective DI observations.
+
+##### Pearson Correlation Coefficient
+
+$\ {\displaystyle \rho \ _{_{_{_{{\text VI},{\text DI}}}}}={\frac{\operatorname {cov} (VI,D I)}{\sigma _{_{_{_{{\text VI}}}}} \sigma _{_{_{_{{\text DI}}}}}}}}=$ `r round(cor,3)`, somewhat weak yet **positive** correlation: the higher a song's VI, its expected DI score is higher.
+
+##### Coefficient of Determination (R-Squared Indicator)
+
+$R^2:= {\rho}^2 (VI,DI)=$ `r r.squared` in terms of "correlation strength", so to speak. Here too, the somewhat low value indicates a relatively weak, albeit positive, correlation. In each new sample of songs, the variance in Valence Index values will somewhat affect the variance in Danceability Index values.
+
+To conclude, in a given sample of songs, our Valence-based model can account for almost `r r.squared` of the sample's variance in Danceability. It seems that as far as *Spotify* is concerned, a song's Valence Index is a considerable (albeit not exclusive) factor in the song's Danceablity score. To demonstrate, if a song has a score of 0.9 on the Valence Index, we expect it will reach an estimate of `r round(a*0.9+b, 3)` on the Danceability Index scale.
+
+### Outlier Observations
+
+Below is a brief analysis of the observations that were distanced the most from the sample mean. Predicted values were calculated based on our linear regression.
+
+```{r style, echo=FALSE, results='asis', warning=FALSE}
+library(kableExtra)
+songs.outliers %>%
+  kbl(digits=2, row.names=FALSE,
+      format.args = list(big.mark = '')) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"),
+                fixed_thead = TRUE,
+                font_size = 10) %>%
+  scroll_box(NULL)
+
+
+#After removing observations that are abnormally-distanced from the sample mean, we expect the coefficient of determination (R-Squared) to increase.
+
+```
+
+\pagebreak
+

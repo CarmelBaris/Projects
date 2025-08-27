@@ -1,0 +1,149 @@
+---
+title: "Lesson4: Method of Moments & Method of Maximal Likelihood"
+output: html_document
+date: "2022-11-24"
+---
+Run to generate document including embedded R code and its outputs:
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Methods for Estimating
+
+See [here](http://www.dataanalysisclassroom.com/lesson66/)
+
+Statistical analysis usually begins with a research question about a well-defined population. 
+The research includes taking a sample of random observations from the population and defining a model, that on the one hand faithfully describes the behavior of the population and on the other hand is simple enough to enable calculations and answer the research question.
+
+## Method of Moments: Estimation of Population Mean
+
+In order to answer optimization problems in a field where we don't have precise information about the population's distribution, we will collect a random sample of n observations (a finite number). Let's denote the observations so:
+$$X_{i},\ i \in [1, n]$$
+Where i denotes the sequential number of observations, i.e. whether it's the first, second, third, etc, being taken into account for the purposes of our analysis. X denotes the quantity being observed (length, amount, etc).
+
+
+Each observation is represented as an **independent** random variable, and all variables share a common and distribution (of *any* distribution, as long as it's the same in all observations),
+$$X_{1}, X_{2}, X_{3}, ...., X_{n}\sim {\ Y}$$
+Because all observations have the same distribution, we'll denote the mean of each independent variable as:
+
+$$\overline{X_{i}}=\mu_{x}$$,
+
+
+In statistics, the Method of Moments is a method of estimation of population parameters, by comparison between the moments of a sample to the moments of the population.
+
+Therefore, the mean of the sample ('sample mean') will be the sum of observation values divided by the number of observations:
+$$\overline{X_{n}}=\displaystyle \frac{1}{n}\sum_{i=1}^{n} (X_{i})$$
+
+As the number of observations grows (n → ∞), the mean of the entire sample converges to the mean of the common distribution as a whole.
+
+
+$$ \hat{E}(X)=\displaystyle \lim_{n \to \infty}\overline{X_{n}}=\displaystyle \lim_{n \to \infty}\frac{1}{n}\sum_{i=1}^{n} (X_{i})\to\hat\mu_{x}$$
+
+Note the hat on the E(X) reminding us that this value is only an *estimation*, a *calculated guess* if you will. For different population samples we'll get different mean values. For this reason, the above estimate is a random variable itself, dependent on the random values in a given sample.
+
+
+### Final Formula for the K-th Moment:
+$$ \hat{E}(X^k)=\overline{X^k}=\frac{1}{n}\sum_{i=1}^{n} [(X_{i})^k]=\hat\mu_{x}$$
+
+
+
+#### Example for Method of Moments
+
+Let's take a real-life example. Let's say there's a major hospital which has a limited number of operation rooms (ORs) and the hospital's CEO is faced with the task of allocating them at the minimal cost. He comes to you for consultation.From the CEO  you learn that you must abide by the following guidelines:
+
+1. Each day, there are three planned surgeries, each performed by a different surgeon working an 8-hour shift (a total of three surgeons per shift). What is the probability that, in total, **all three** surgeries will **exceed** a time period of **8 hours**?
+
+2. If the first two surgeries together take less than four hours, it might be worth calling in a fourth surgeon. Therefore, what is the probability that the first **two** surgeries will take **less than 4 hours**?
+
+In order to answer these optimization problem, we will collect a random sample of surgeries (n, a finite number). Let's denote the surgeries so:
+$$X_{i},\ i \in [1, n]$$
+Where i denotes the sequential number of a surgery, i.e. whether it's the first, second, third, etc, being taken into account for the purposes of our analysis. X denotes the length of time it took that surgery to be completed.
+
+
+Each surgery (observation) is represented as an **independent** random variable, and all variables share a common distribution. Let's assume the common distribution is a gamma distribution, because X predicts the wait time until:
+1. the *first* three surgeries exceed 8 hours.
+2. the *first* two surgeries take less than 4 hours.
+$$X_{1}, X_{2}, X_{3}, ...., X_{n}\sim {\ Gamma(\alpha, \lambda)}$$
+We Assume all surgeries have about the same average waiting time (expectancy). Therefore, the mean of each independent Gamma variable is:
+
+$$\overline{X_{i}}=\mu_{x}=\frac{\alpha}{\lambda}$$,
+
+Reminder: if we have a series of **independent** Gamma random variables, the total waiting time 
+
+
+Using the formula of K-th Moment, we'll calculate the 
+$$ \hat{E}(X^k)=\overline{X^k}=\frac{1}{n}\sum_{i=1}^{n} [(X_{i})^k]=\hat\mu_{x}$$
+
+
+See [here](https://online.stat.psu.edu/stat462/node/95/) for more examples.
+
+# Gamma Distribution
+
+Used to predict the wait time until future events.
+
+Denoted Gamma(α,λ) where its supporters are x∈(0,∞).
+
+A continuous distribution that is affected by two parameters:
+1) α>0, the # of events for which you are waiting, aka "shape".
+2) λ>0, the rate of events happening, aka "rate".
+
+Let's calculate the cumulative Gamma(5,3) distr. above x=2.5:
+
+``` {r Gamma Distribution using rate}
+pgamma(q=2.5, shape=5, rate=3, lower.tail = FALSE) # P[X>2.5]
+```
+
+Instead of "rate", you can plug in "scale" which is 1/rate:
+
+``` {r Gamma Distribution using scale}
+pgamma(q=2.5, shape=5, scale=1/3, lower.tail = FALSE) # P[X>2.5]
+```
+
+To calculate the Gamma(2,4) distr. between two x values, 2 and 4:
+
+``` {r Gamma Cumulative Distribution Between Values}
+
+cd.a <- pgamma(q=4, shape=2, rate=4) # P[X<4]
+
+cd.b <- pgamma(q=2, shape=2, rate=4) # P[X<2]
+
+cd.a-cd.b # P[2<X<4]
+```
+
+### How does the Gamma Distr. compare to the Exponential Distr.?
+The exponential distribution predicts the wait time until the *very first* event. The gamma distribution, on the other hand, predicts the wait time until the *k-th* event occurs.
+If you set the shape parameter to k=1, you'll notice that it is the same as the probability density function of Exponential distribution: Gamma(1,λ)=exp(λ)
+
+See more [here](https://towardsdatascience.com/gamma-distribution-intuition-derivation-and-examples-55f407423840).
+
+Note that event arrivals are modeled by a Poisson process with rate λ. If arrivals of events follow a Poisson process with a rate λ, then the wait time until k arrivals follows the Gamma Function.
+
+### Gamma Function (not distribution)
+
+Denoted Γ(z), it is a generalized form of the factorial function, f(x+1)=x!, which only works for natural numbers. Unlike the factorial, which takes only the positive integers, we can input any real/complex number into z, including negative numbers. The Gamma function connects the black dots and draws the curve nicely.
+
+For data scientists, machine learning engineers, researchers, the Gamma function is probably one of the most widely used functions because it is employed in many distributions. For this reason, you'll find the Gamma function very hard to avoid. 
+
+### Attributes of the Gamma Function:
+
+for z := a natural number n
+* Γ(n+1) = n!
+* Γ(n) = (n-1)!
+
+for z := ∀α, including negative numbers, fractions, and complex numbers
+* Γ(α+1) = α⋅Γ(α)
+
+known examples:
+* Γ(1) = 1 by definition
+* Γ(0.5) = √π ≅ "(1.5-1)!"
+* Γ(-0.5) = -2⋅√π ≅ "(0.5-1)!"
+* Γ(-1) = Γ(-2) = Γ(-3) ≃ ∞ (asymptotically equals to infinity)
+
+
+See more [here](https://towardsdatascience.com/gamma-function-intuition-derivation-and-examples-5e5f72517dee).
+
+---
+For more details on using R Markdown see [here](https://rmarkdown.rstudio.com/lesson-1.html).
+Specifically for math in R Markdown see [here](https://rpruim.github.io/s341/S19/from-class/MathinRmd.html).
+

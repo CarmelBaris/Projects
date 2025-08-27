@@ -1,0 +1,16 @@
+---
+title: "draft"
+author: "Carmel Baris"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+hello world
+\newpage
+```{r, echo=FALSE}
+1+1
+```
+\pagebreak
+```{r, echo=FALSE}
+plot(1:10)
+```

@@ -1,0 +1,196 @@
+---
+title: "Life Expectancy in the World"
+output: html_notebook
+---
+
+
+```{r, echo=FALSE}
+#readme
+# The Global Health Observatory (GHO) data repository under World Health Organization (WHO) keeps track of the health status as well as many other related factors for all countries. The datasets are made available to public for the purpose of health data analysis. The dataset related to life expectancy, health factors for 193 countries has been collected from the same WHO data repository website and its corresponding economic data was collected from United Nation website.
+
+
+#load data
+print(getwd())
+new_dir <- 'C:/Users/user/Documents/Carmel/RProjects/Regression_intro/Life Expectancy'
+setwd(new_dir)
+life <- read.csv(paste0(new_dir, '/Life Expectancy Data.csv'))
+
+#get to know the dataset
+nrow(life) # num of rows excluding header row, 2938
+colnames(life) # read column names
+head(life) # read first 6 entries
+
+#check for missing values in the datset
+missing_values <- is.na(life)
+missing_counts <- colSums(missing_values)
+print(missing_counts) # print the number of missing values in each column
+
+```
+A similar dataset appears in [Kaggle](https://www.kaggle.com/datasets/mosesmoncy/50-startup-prediction).
+
+## Descriptive Statistics
+For each startup, the dataset lists its expenses on Research & Development, Administration & Marketing, as well as its Profit. Additionally, the dataset categorizes the life based on the State the reside in.
+Let's take a look at some descriptive statistics.
+```{r}
+summary(life)
+```
+
+As expected, the `State` field doesn't provide numerical statistics, because it is a categorical field.
+Let us observe the proportional representation of states in the dataset:
+```{r}
+table(life[,4])
+```
+
+Interestingly, Marketing expenses are the highest in comparison to the other expenses (highest min. and max. values, respectively), and even in comparison to the company profits.
+The Administrative department follows in matters of highest expenses, its median and mean spending values being higher than their counterparts in the R&D departments.
+
+## Distribution of Profit
+Looking at the `Profit` field, our target/explainable variable (our `Y` variable, so to speak), we realize its values do not take on a normal distribution, as is required when using a linear regression model. Therefore, we will attempt to 'smooth' out the distribution, in order to ensure the closest fit to a normal distribution. In this current exercise, we will not apply transformations, but we will keep it in mind.
+
+```{r}
+hist(life$Profit, breaks = nrow(life))
+```
+
+Returning to our dataset, we can assume that the fields listing a company's expenses could explain for changes in the company's profit, as they are a part of its calculation. To validate this assumption, we'll create a graph for each explanatory variable against the values of the company's `Profit`.
+```{r}
+plot(life$Marketing.Spend, life$Profit)
+plot(life$Administration, life$Profit)
+plot(life$R.D.Spend, life$Profit)
+```
+
+As demonstrated by the scatter plots, it seems that the Marketing and R&D expenses (especially the former) hold some form of linear relationship with the company's Profits. On the other hand, upon initial observation, it looks like the Administrative expenses aren't dispersed in a linear fashion, raising the suspicion that they are not capable of adequately explaining the variance in Profits.
+
+Based on these elementary plots, we may deduce that the Marketing and R&D expenses are positively correlated to the company's profit, with the correlation factor of the Marketing expenses being significantly higher than the latter. The Administrative field will most likely have a low correlation factor, possibly even a negative one. Let us exclude the `State` field and calculate the correlation matrix to check our assumptions:
+
+```{r}
+cont_vars <- life[,-4] # select all columns except the 4th column (`State`)
+# head(colnames(cont_vars)) # verify that only `State` was removed
+cor(cont_vars)
+```
+
+It is well worth noting that the function used to compute this matrix expects only continuous variables, because it is based on Pearson's correlation formula. In other cases, where we have discrete variables as well, we will need to exclude them from this matrix and check their correlations using alternative techniques such as scatter plots.
+
+```{r}
+My_lm <- function(X,Y){
+  # Calculates components of the linear regression for given X, Y
+  # @param X is matrix with n rows and p+1 columns, incl col vector of 1s
+  # @param Y is vector with length n
+
+  # estimate target vector of linear regression
+  X <- as.matrix(X)
+  xtx_inverse <- solve(t(X)%*%X) # (X ⷮX)⁻¹
+  P_x <- X %*% xtx_inverse %*% t(X) # Pₓ projection matrix onto the colspace of X
+  Y_hat <- P_x %*% Y # Ŷ = Pₓ Y
+
+  # estimate vector of coefficients
+  beta_hat <- xtx_inverse %*% t(X) %*% Y # (X ⷮX)⁻¹X ⷮ·Y
+
+  # calculate vector of residuals ⅇ
+  residuals <- Y - Y_hat
+
+  # calculate Squared Sum of Errors (ⅇ residuals)
+  SSE <- sum((residuals)^2)
+
+  # estimate variance of noise vector
+  n <-  length(Y) # num of observations
+  p <- ncol(X) # num of explanatory variables in given dataset, before excluding any fields
+  dof <- n-p # degrees of freedom; here no need to add (-1) bc col of 1s has been pre-excluded
+  sigma2_hat <- SSE / dof # σ᷍ ²
+  beta_cov <- sigma2_hat * xtx_inverse # σ᷍ ²·(X ⷮX)⁻¹
+  SSR <- sum((Y_hat-mean(Y))^2)
+  SST <- sum((Y-mean(Y))^2)
+  R_squared <- SSR / SST # = 1 - (SSE / SST)
+  alpha <- 0.05 # Level of significance (Level of confidence = 1 - alpha)
+
+  # allow retrieving calculated values using My_lm$index_name
+  # e.g. My_lm(X₁,Y₁)$beta_cov will return the covariance of the estimated beta for (X₁, Y₁)
+  return(list(beta_hat = beta_hat, beta_cov = beta_cov, SSE = SSE,
+              sigma2_hat = sigma2_hat, R_squared = R_squared, dof = dof, residuals = residuals,
+              X = X, Y = Y, Y_hat = Y_hat))
+  # Guidelines:
+  # beta_hat is the vector of beta estimators. Its dimension should be equal to the column dimension of X.
+  # beta_cov is beta covariance matrix estimator.
+  # sigma2_hat is the estimator of sigma^2.
+  # R_squared is the R^2, i.e. the proportion of explained variance in the model.
+  # dof is the degree of freedom of the model.
+  # residuals is the vector of e = Y - Y_hat. It should be with length n.
+  # X is the original X matrix given as input.
+  # Y is the original Y matrix given as input.
+  # Y_hat it the vector of Y_hat, i.e. the predicted value for each observation. It should be with length n.
+}
+```
+
+## Fitting a regression model
+We will assemble the linear regression model, using the given data.
+Currently, we will disregard the categorical field (`State`).
+```{r}
+
+Y <- cont_vars[, 4]
+
+X <- cont_vars[, -4] # remove the 4th column i.e. `Profit` (`State` was already removed)
+# head(colnames(expl_vars)) # verify that only `Profit` was removed
+x0 <- rep(1, length(Y)) # add vector of 1s
+X <- cbind(x0, X) # binds by columns (`rbind` is by rows), order is important
+
+# Fitting a linear regression model
+
+# ...using our function
+m_reg <- My_lm(X, Y) # calculate components of regression
+
+# ...using built-in R function
+# Note: data matrix includes both Y & X (here we chose only continuous explanatory variables)
+# Note: do not include the artificial vector of 1s
+# Explanation of first arg syntax:
+#   create a linear model,
+#   where distribution of `Profit` should be explained
+#   by the other (continuous) fields.
+r_reg <- lm(Profit ~ ., data = cont_vars)
+cat("\nDescriptive statistics:\n")
+summary(r_reg)
+# plot(r_reg)
+```
+
+Let us compare the results from our regression model function and its built-in R counterpart.
+
+```{r}
+Est.Betas <- data.frame(
+        Carmel= m_reg$beta_hat,
+        R= r_reg$coefficients)
+
+paste0("Number of predictor variables: ", length(r_reg$coefficients), cat("\n"))
+paste0(c(cat("\n Vector of Estimated Betas \n"),
+         "Intercept           R.D.Spend          Administration          Marketing.Spend",
+         Est.Betas))
+cat("----------------\n")
+cat("Degrees Of Freedom \n")
+cat("Me:", m_reg$dof, "\n")
+cat("R:", r_reg$df.residual, "\n")
+cat("----------------\n")
+cat("Coeff Of Determination (R.Squared) \n")
+cat("Me:", m_reg$R_squared, "\n")
+cat("R:", summary(r_reg)$r.squared, "\n")
+cat("----------------\n")
+cat("Sum Of Squared Errors \n")
+cat("Me:", m_reg$SSE, "\n")
+cat("R:", deviance(r_reg), "\n")
+cat("----------------\n")
+cat("Residual Standard Error\n")
+cat("Me:", sqrt(m_reg$sigma2_hat), "\n")
+cat("R:", summary(r_reg)$sigma, "\n")
+```
+
+## Validating The Underlying Assumptions
+Our first underlying assumption is that the explanatory variables are independent. In other words, we expect them not to be correlated at all (0 correlation). To assess this assumption, let us calculate the correlation matrix between all explanatory variables that have a continuous distribution:
+
+```{r}
+cor(X)
+```
+
+
+
+
+
+
+
+
+

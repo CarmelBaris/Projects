@@ -1,0 +1,102 @@
+---
+title: "Analysis of *Spotify* Attributes for Audio Tracks"
+author: "Sigal Falk, ID 206682031 & Carmel Baris, ID 318455276"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme:
+      version: 4
+urlcolor: blue
+---
+
+```{=html}
+<style type="text/css">
+   .main-container {max-width: 77%; overflow-y:auto}
+   .row {display: flex;}
+   .column {flex: 50%;}
+
+body{ /* Normal  */
+      font-size: 14px;
+  }
+td {  /* Table  */
+  font-size: 12px;
+  
+}
+h1.title {
+  font-size: 32px;
+  color: DarkRed;
+}
+
+h3 { /* Header 3 */
+  font-size: 22px;
+  color: DarkGray;
+
+}
+
+h4 { /* Header 4 */
+  font-size: 18px;
+  color: DarkGray;
+}
+
+pre { /* Code block - determines code spacing between lines */
+    font-size: 14px;
+}
+
+</style>
+```
+
+------------------------------------------------------------------------
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# ++++++++++++++++++++++++ #
+# INSTALLING DEPENDENCIES
+# ++++++++++++++++++++++++ #
+#install required only once per user
+
+
+# dplyr::install.packages("kableExtra")
+# dplyr::install.packages("dplyr")
+# tidyverse::install.packages("tidyverse")
+# tinytex::install_tinytex()
+
+# ++++++++++++++++++++++++ #
+# LOADING DEPENDENCIES
+# ++++++++++++++++++++++++ #
+library(tinytex)
+library(knitr)
+# library(dplyr)
+# library(tidyverse)
+```
+
+```{r data}
+# ++++++++++++++++++++++++ #
+# IMPORT CLEAN DATA
+# ++++++++++++++++++++++++ #
+```
+### Chosen Dataset
+
+Our dataset[^1] includes Spotify metadata for over 170K songs dated from 1921 till 2020. In our analysis we focused solely on the years 2019-2020 and on two continuous attributes: Valence Index (abbr. VI), which determines the musical positiveness conveyed by a track; and Danceability Index (abbr. DI), which determines the suitability of the song track for dancing. Both attributes range on a scale from 0.0 to 0.1 and are determined by Spotify's internal logic ("black-box" values).
+
+
+This report aims to calculate descriptive statistics and to perform a statistical test on a dataset of songs and their attributes, as they were extracted from Spotify's Open-API.[^1] In accordance with our previous report, we have selected songs from 2019-2020 while focusing on two continuous random variables of each song: (1) Danceability Index (measured in DI units) which describes how suitable a track is for dancing based on a combination of musical elements including tempo, rhythm stability, beat strength, and overall regularity; and its Valence Index (measured in DI units) which describes the musical positiveness conveyed by a track. The DI scale ranges from 0.0 least danceable to 1.0 most danceable. The VI scale is less dichotomous: tracks with high valence sound more positive (e.g. happy, cheerful, euphoric), while tracks with low valence sound more negative (e.g. sad, depressed, angry). This report is structured into four sections: (1) Introduction, where the investigation problem is set; (2) Descriptive Statistics, where the data is parameterized statistically; (3) Hypothesis Test, in which a statistical test is applied to data and its results are reported; and (4) Conclusion, where an in-depth discussion on .
+
+
+In accordance with our previous report, we are using a dataset of songs enhanced by Spotify attributes.[^2] to remove `r format(removed, big.mark=",")` records of missing data (out of `r format(two_years, big.mark=",")` in total).
+[^1]: Dataset ID: [babarory/spotify-dataset-1921-2020](https://data.world/babarory/spotify-dataset-1921-2020), owned by Baptiste Mansire on Data.world, CSV format, last updated on February 5, 2021.
+
+[^2] We have conducted this analysis in a "black-box" method, i.e. without full knowledge of Spotify's algorithm for calculating a given song's DI and VI. For this reason, we have chosen to treat them both as conventional musical attributes. As such, the measuring units of any two songs refer to their relative location on the index scale.
+
+Our previous report has also shown that the VI has a symmetric normal distribution, whereas the DI has a slightly negatively skewed (left-skewed) normal distribution.
+
+## Estimating Population Parameters of *DI* Distribution
+
+#### Point Estimators
+
+It is given that the Danceability Index is normally distributed, and therefore both the Method of Moments and the Maximum Likelihood Estimation provide the same unbiased point estimator for expectancy: the sample mean = $ E(\hat{\theta}) = \theta = $ `r round(mean(dance), 3)`.
+
+expectancy of `r format(two_years, big.mark=",")` variance of `r round((sd_dance)^2, 3)`
+
+\pagebreak
+
