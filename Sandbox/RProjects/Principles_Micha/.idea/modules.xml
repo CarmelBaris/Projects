@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<project version="4">
-  <component name="ProjectModuleManager">
-    <modules>
-      <module fileurl="file://$PROJECT_DIR$/../.idea/R_2023.iml" filepath="$PROJECT_DIR$/../.idea/R_2023.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/Stats_Principles.iml" filepath="$PROJECT_DIR$/.idea/Stats_Principles.iml" />
-    </modules>
-  </component>
-</project>
