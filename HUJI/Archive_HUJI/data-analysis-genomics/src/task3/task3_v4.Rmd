@@ -1,0 +1,210 @@
+---
+title: "Task2"
+date: Sys.Date()
+output:
+  html_document:
+    code_folding: show
+  pdf_document: default
+editor_options:
+  markdown:
+    wrap: sentence
+---
+
+Team 6:
+ - Shawn Yakir , 315714980, shawnyakir@gmail.com  
+ - Sarah Levitz, 324673623, sarah.levitz@mail.huji.ac.il
+ - Carmel Baris, 318455276, carmel.baris@mail.huji.ac.il
+
+
+### Libraries used
+
+```{r libraries, message=FALSE, warning=FALSE, include=FALSE}
+library('ggplot2')
+library('data.table')
+library('tidyr')
+library('dplyr')
+```
+
+
+### Paths and Data
+
+
+```{r data_A, message=FALSE, warning=FALSE, include=FALSE}
+
+#helper functions
+source("help_funcs.R")
+
+# Load the data (Group A)
+reads_file = '~/Carmel/RProjects/Lab_Benjamini/data/TCGA-13-0723-01A_lib2_all_chr1.forward'
+chr1_reads = fread(reads_file) 
+colnames(chr1_reads) = c("Chrom","Loc","FragLen")
+
+# Get read line of actual data
+locations = chr1_reads$Loc
+beg_region = 1
+end_region = 1+2e07
+reads_20K = getReadLine(locations, beg_region, end_region)
+Nsingle = length(reads_20K)
+Ssingle = sum(reads_20K)
+```
+
+
+## Introduction 
+
+```{r}
+# Calculate probabilities
+obs_prob_singl <- Ssingle / Nsingle
+exp_pois_upto5 = dpois(0:5, lambda)
+exp_pois_plus5 = sum(dpois(6:max(reads_20K), lambda))
+expected_prob = c(exp_pois_upto5, exp_pois_plus5)
+expected_prob = round(expected_prob,2)
+
+```
+
+
+## Avg coverage and distance between reads
+```{r}
+last_read = as.numeric(chr1_reads[nrow(chr1_reads),"Loc"])
+
+# {Average Coverage} = {Total Reads}/{Total Bases}
+avg_coverage = nrow(chr1_reads)*(1 / last_read)
+
+
+
+```
+
+## Compare the expected distribution versus the actual distribution
+
+```{r}
+# produce many instances of uniform variables
+set.seed(1)
+nsamp = 100e+06
+max_samp = nsamp * 10
+unif_dat = runif(n = nsamp, 0,max_samp )
+s_dat = sort(unif_dat)
+
+# obtain Poisson by counting occurrences in equal-size intervals 
+k = 1000
+output_1K = binReads(ceiling(s_dat), k)
+
+```
+
+```{r}
+
+```
+
+
+### Observed distribution of the data (count)
+```{r}
+
+# Filter out values for 0-5 and aggregate 5+ as 5+
+Nsingle = length(reads_20K)
+line_filtered = ifelse(reads_20K > 5, 5, reads_20K)
+obs_prob_singl = setNames(numeric(7), c(as.character(0:5), "5+"))
+obs_prob_singl[as.character(0:5)] = table(factor(line_filtered, levels = 0:5))
+obs_prob_singl["5+"] = sum(reads_20K > 5) / Nsingle
+# obs_prob_singl = round(sum(reads_20K) / Nsingle, 2)
+obs_prob_single = sum(reads_20K) / Nsingle # in region
+
+lambda = mean(reads_20K)  # Mean of observed counts
+
+# Calculate expected probabilites for 0-5 and aggregate the rest as 5+
+
+# Calculate the expected distribution for a uniform Poisson model
+exp_pois_upto5 = dpois(0:5, lambda)
+
+exp_pois_plus5 = sum(dpois(6:max(reads_20K), lambda))
+
+# join to merged probs object
+expected_prob = c(exp_pois_upto5, exp_pois_plus5)
+
+expected_prob = round(expected_prob, 2) 
+names(expected_prob) = c(as.character(0:5), "5+") # add column names
+obs_prob_singl
+```
+
+
+
+### Comparing the densities in a table:
+```{r}
+
+
+# Round the counts to 5 decimal places
+obs_prob_singl_ = round(obs_prob_singl, 5)
+
+expected_prob_ = round(expected_prob, 5)
+
+# Create a data frame
+prob_df_ = data.frame(
+  pois_val_ = c("expected", "observed"),
+  "0"  = c(expected_prob_[1], obs_prob_singl_[1]),
+  "1"  = c(expected_prob_[2], obs_prob_singl_[2]),
+  "2"  = c(expected_prob_[3], obs_prob_singl_[3]),
+  "3"  = c(expected_prob_[4], obs_prob_singl_[4]),
+  "4"  = c(expected_prob_[5], obs_prob_singl_[5]),
+  "5"  = c(expected_prob_[6], obs_prob_singl_[6]),
+  "5+" = c(expected_prob_[7], obs_prob_singl_[7])
+  )
+
+# Create a data frame rounded to 2 decimal points and display the result
+
+obs_prob_singl = round(obs_prob_singl, 2)
+expected_prob = round(expected_prob, 2)
+prob_df = data.frame(
+  pois_val = c("expected", "observed"),
+  "0"  = c(expected_prob[1], obs_prob_singl[1]),
+  "1"  = c(expected_prob[2], obs_prob_singl[2]),
+  "2"  = c(expected_prob[3], obs_prob_singl[3]),
+  "3"  = c(expected_prob[4], obs_prob_singl[4]),
+  "4"  = c(expected_prob[5], obs_prob_singl[5]),
+  "5"  = c(expected_prob[6], obs_prob_singl[6]),
+  "5+" = c(expected_prob[7], obs_prob_singl[7])
+  )
+
+print(prob_df, right = TRUE)
+
+
+```
+
+
+Graphical comparison:
+```{r}
+# Create a data frame for the graphical comparison
+comparison_df = data.frame(
+  Count = names(obs_prob_singl),
+  Observed = as.numeric(obs_prob_singl),
+  Expected = as.numeric(expected_prob)
+)
+
+# Reshape data to long format using pivot_longer
+comparison_df_long = comparison_df %>%
+  pivot_longer(cols = c("Observed", "Expected"), names_to = "Type", values_to = "Value")
+
+# Plot
+ggplot(comparison_df_long, aes(x = Count, y = Value, fill = Type)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
+  scale_fill_manual(values = c("Observed" = "darkblue", "Expected" = "lightblue")) +
+  labs(title = "Observed vs Expected Poisson Distribution Probabilities",
+       y = "Probabilities",
+       x = "Read Counts") +
+  theme_minimal()
+
+
+```
+
+
+
+
+```{r}
+# Step 5: Numerical metric (Chi-square goodness-of-fit test)
+chisq_test = chisq.test(as.numeric(obs20K_count), p = exp20K_count/sum(exp20K_count))
+print(chisq_test)
+
+```
+
+
+
+
+## Short summary
+
+Based on our analysis of the data, it seems that the reads are not distributed normally or uniformly.

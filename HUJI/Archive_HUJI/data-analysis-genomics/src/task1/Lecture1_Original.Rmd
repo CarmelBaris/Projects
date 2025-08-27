@@ -1,0 +1,234 @@
+---
+title: "Lecture1"
+author: "Yuval Benjamini"
+date: "7 May 2024"
+output:
+  html_document:
+    code_folding: hide
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+```{r}
+#location of chr22: 
+path = 'https://hgdownload.soe.ucsc.edu/goldenPath/hg18/chromosomes/chr22.fa.gz'
+
+```
+
+The following
+
+```{r}
+######## CHANGE THESE FILENAMES
+dir_name = "/Users/yuvalbenjamini/Dropbox/Courses/Lab/Lab_52568_24"
+str22_file = sprintf("%s/%s", dir_name, "hg18_str22.rda")
+
+```
+
+```{r}
+beg_region =10000000
+end_region =20000000-1
+
+# Use one of the following
+
+#chr22_reg_str = as.character(st[beg_region:end_region])
+# OR
+dat_name = load(str22_file) # might take more memory, but safer
+chr22_reg_str = substr(str22, beg_region,end_region)
+
+region_line= strsplit(chr22_reg_str,'')[[1]]
+```
+
+A bit about memory allocation
+
+```{r}
+format(object.size(region_line),units = "Mb")
+```
+
+We can make the first examination of our data:
+
+```{r}
+table(region_line)
+```
+
+N means that this letter is unknown.
+If exist, small letters are bases which are less sure.
+
+We can change small letters into capital letters (don't need here)
+
+```{r}
+#region_line = toupper(region_line)
+```
+
+Here we codde the data as a factor.
+This changes each label (e.g. "A") into a number (1).
+
+We don't include "N" as a level, so it is treated as a missing value.
+This makes
+
+```{r}
+chr22_line = factor(region_line, c("A","T","C","G"))
+print(chr22_line[5000000:5000010])
+print(chr22_line[1:10])
+```
+
+Adding the missing values makes this object larger.
+We can access where the missing values are using the "is.na()" function
+
+```{r}
+format(object.size(chr22_line), units = "Mb")
+format(object.size(region_line), units = "Mb")
+```
+
+```{r}
+table(chr22_line)
+plot(table(chr22_line))
+?plot.table
+plot(table(chr22_line), lw= 5, xlab = "Base", ylab = "Count", main = "Chrom 22")
+nas = is.na(chr22_line)
+abline(h=0.25*sum(!nas))
+sum(is.na(chr22_line))
+```
+
+## Looking at the 4-letter sequence?
+
+```{r}
+
+N = length(chr22_line)
+izug = seq(from = 1,to=N,by = 2)
+zug = seq(2,N,2)
+counts2_z = table(chr22_line[izug],chr22_line[zug])
+counts2 = table(chr22_line[1:(N-1)],chr22_line[2:N])
+
+mosaicplot(counts2_z)
+mosaicplot(counts2)
+
+# After Normalization and round
+round(counts2_z/sum(counts2_z),3)
+
+
+```
+
+We want to study letter prevalence at each region.
+How do we look at it?
+
+```{r}
+stam_range = 5000000+(1:100)
+# stam_range = 5000000+(1:1000)
+plot(stam_range,chr22_line[stam_range]=="A")
+```
+
+It's hard to see anything...
+
+One way, to bin it:
+
+```{r}
+N = length(chr22_line)
+bin_size = 2000
+n_bins = ceiling(N/bin_size)
+A_count = numeric(N/bin_size)
+for (i in 1:n_bins){
+  start_bin = 1+ (i-1)*bin_size
+  end_bin = i*bin_size
+  A_count[i] = sum(chr22_line[start_bin:end_bin] =="A")
+}
+```
+
+And analyze this line
+
+```{r}
+
+hist(A_count)
+rug(A_count)
+plot(density(A_count,na.rm=T))
+rug(A_count)
+
+length(A_count)
+summary(A_count)
+boxplot(A_count,horizontal=TRUE)
+# Is it similar to an 0.25 Binomial?
+# You can check...
+
+# Is it similar to a normal?
+norm_A = (A_count - mean(A_count,na.rm=TRUE))/sd(A_count,na.rm=TRUE)
+below05 = (norm_A < qnorm(0.05))
+mean(below05,na.rm=T)
+above95 = (norm_A > qnorm(0.95))
+mean(above95,na.rm=T)
+
+```
+
+Align with location...
+
+```{r}
+plot(A_count)
+
+plot(A_count[2000:n_bins],pch =20, cex = 0.5)
+plot((1:n_bins)*bin_size,A_count,pch =20, cex = 0.3)
+plot((1:n_bins)*bin_size,A_count,pch =20, cex = 0.5, xlab = "Location")
+plot((2000:n_bins)*bin_size,A_count[2000:n_bins]/bin_size,pch =20, cex = 0.5, xlab = "Location")
+abline(h = 0.25)
+# Make sure that plot is sufficiently wide so that the sequence is easy to see...
+
+```
+
+Rerun for all four letters
+
+```{r}
+bin_size = 2000
+n_bins = ceiling(N/bin_size)
+let_count = matrix(nr = N/bin_size,nc = 5)
+letters = c("A","C","G","T")
+for (i in 1:n_bins){
+  start_bin = 1+ (i-1)*bin_size
+  end_bin = i*bin_size
+  for (let in 1:4) {
+    let_count[i,let] = sum(chr22_line[start_bin:end_bin] ==letters[let],na.rm=TRUE)
+  }
+}
+plot((1:n_bins)*bin_size,let_count[,4]/bin_size,pch =20, cex = 0.5, xlab = "Location")
+
+# We get a matrix with 4 columns for each of the four base-types, and n_bins rows for each of the bins
+```
+
+How can we compare?
+
+Horizontal alignment for the four letters:
+
+```{r}
+# Check out examples in plotting.html file
+#
+# par() adds parameters to the plotting 
+# par(mfcol = c(nr,nc)) makes a grid of nr rows of plots and nc columcns of plots. Here, one column and four rows
+# par(mar = c(a,b,c,d)) is the margins (shulaim) around each plot 
+
+par(mfcol = c(4,1))
+for (i in 1:4){
+  plot((1:n_bins)*bin_size,let_count[,4]/bin_size,pch =20, cex = 0.5, xlab = "Location")
+}
+
+# So, we change the margins
+par(mfcol = c(4,1),mar = c(1,0,0,0))
+for (i in 1:4){
+  plot((1:n_bins)*bin_size,let_count[,i]/bin_size,pch =20, cex = 0.5, xlab = "Location")
+}
+
+```
+
+Or scatter plot between pairs of letters:
+
+```{r}
+par(mfcol = c(1,1),mar = c(4,3,3,3))
+plot(let_count[,1],let_count[,4])
+plot(let_count[,1],let_count[,3])
+plot(let_count[,2],let_count[,3])
+```
+
+Is there any correlation between neighboring bins?
+
+```{r}
+par(mfcol = c(1,1),mar = c(4,3,3,3))
+n_bins = nrow(let_count)
+plot(let_count[2:n_bins,1],let_count[1:n_bins-1,1])
+
+```

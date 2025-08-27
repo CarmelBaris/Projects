@@ -1,0 +1,145 @@
+---
+title: "Lecture4"
+author: "Yuval Benjamini"
+date: "4 June 2024"
+output: html_document
+---
+
+# Part 2, non-parametric regression using simulated data
+
+
+Simulate data
+
+```{r}
+set.seed(100)
+x = sort(c(runif(100,-5,5)))
+y = sin(x) + 0.5*x + 0.03*x^2 + rnorm(100)
+plot(x,y,cex=0.8)
+# Plot true equation
+lines(x,sin(x) + 0.5*x + 0.03*x^2)
+
+plot_sim = function(x,y,lim_y = c(-4,3.5)){
+  plot(x,y, ylim = lim_y)
+  lines(x,sin(x) + 0.5*x + 0.03*x^2)
+}
+
+```
+
+
+
+## A problem with polynomial data
+
+```{r}
+# Actual equation (black)
+plot_sim(x,y, lim_y = c(-6,3))
+
+# Predicting using polynomial of 3rd degree (green)
+cube_mod = lm(y~I(x^3)+I(x^2)+x)
+lines(x, predict(cube_mod),lw=2,col=3)
+
+# What happens when we change a few small values?
+y_corrupt = y; y_corrupt[1:5]=-6
+cube_mod_corrupt = lm(y_corrupt~I(x^3)+I(x^2)+x)
+
+# Prediction based on corrupted data (blue) 
+points(x,y_corrupt,cex = 0.7,pch = 'x', col=2)
+lines(x, predict(cube_mod_corrupt),lw=2,col=4)
+```
+
+
+## Polynomial in regions
+Set up regions ("knots"):
+```{r}
+plot_sim(x,y)
+abline(v=c(-2,2),lt=2)
+```
+
+```{r}
+grp = 1+(x>-2)+(x>2)
+knitr::kable(table(grp))
+```
+
+```{r}
+lim.pts = c(-5,-2,2,5)
+new = data.frame(x=c(seq(-5,-2.001,len=20),seq(-1.999,1.999,len=30),seq(2.001,5,len=20)))
+
+plot_sim = function(x,y){
+  plot(x,y)
+  lines(x,sin(x) + 0.5*x + 0.03*x^2)
+  abline(v=c(-2,2), lt=2)
+}
+
+```
+
+### Approximating by a piece-wise CONSTANT function
+
+First version:
+
+```{r}
+
+pw_const = by(y,grp,mean) # Mean for each group
+plot_sim(x,y)
+lines(c(-5,-2),c(pw_const[1],pw_const[1]),col="blue",lwd=2)
+lines(c(-2,2),c(pw_const[2],pw_const[2]),col="blue",lwd=2)
+lines(c(2,5),c(pw_const[3],pw_const[3]),col="blue",lwd=2)
+#res = y-pw_const[grp]
+#plot(res[1:(length(y)-1)],res[2:length(y)])
+```
+
+Second version - using `lm()`:
+
+```{r}
+# pw constant - another look
+plot_sim(x,y)
+pw_const_const = lm(y ~ I( (x< -2)) + I((x<2 & x>-2)) + I((x>2)))
+summary(pw_const_const)
+lines(new$x,predict(pw_const_const,new),lwd=2,col='blue')
+```
+
+Note: Function I has two main uses: in `data.frame()` and in `formula()`. \n
+Here we use it in `formula()` to inhibit the interpretation of operators such as "+", "-", "*" and "^" as formula operators, so they are used as arithmetical operators. 
+
+
+### Approximating by a piece-wise LINEAR function
+
+First version:
+
+```{r}
+plot_sim(x,y)
+for (i in 1:3){
+  x.i = x[grp==i]
+  y.i = y[grp==i]
+  lin_reg.i = lm(y.i~x.i)$coefficients
+  lines(lim.pts[c(i,i+1)],
+        lim.pts[c(i,i+1)]*lin_reg.i[2]+lin_reg.i[1],
+        col="blue",lwd=2)
+}
+```
+
+
+Second version - using `lm()`:
+
+```{r}
+plot_sim(x,y)
+
+pw_const_lin = (lm(y ~ I(x*(x< -2)) 
+                   + I((x<2 & x>-2)) 
+                   + I((x>2)) 
+                   + I(x*(x<2 & x>-2)) 
+                   + I(x*(x>2))))
+
+lines(new$x,predict(lm(y ~ I(x*(x< -2)) 
+                       + I((x<2 & x>-2)) 
+                       + I((x>2)) 
+                       + I(x*(x<2 & x>-2)) 
+                       + I(x*(x>2))),
+                    new),lwd=2,col='blue')
+```
+
+```{r}
+plot(x, -x*(x< -2),col = 0)
+lines(x, -x*(x< -2))
+lines(x, x^2*(x< -2)/5, col = 2)
+```
+
+Region regression can be run on each region separately, though it makes it a bit harder to get residuals. 

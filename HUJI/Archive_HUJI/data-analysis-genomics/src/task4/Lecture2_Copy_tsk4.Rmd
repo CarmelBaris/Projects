@@ -1,0 +1,293 @@
+---
+title: "Lecture2"
+author: "Yuval Benjamini"
+date: "21 May, 2024"
+output: html_document
+---
+
+
+
+Install package that reads tables much faster
+```{r}
+if (!require('data.table')){
+  install.packages('data.table')
+  library('data.table')
+}
+library('tictoc')
+
+if (!require('manipulate')){
+  install.packages('manipulate')
+  library('manipulate')
+}
+
+
+```
+
+Read the file...
+fread is a more efficient function for reading large tables from files
+
+```{r}
+reads_file = '/Users/yuvalbenjamini/Library/CloudStorage/Dropbox/Courses/Lab/Lab_52568_16/DNAseq/Data/TCGA-13-0723-10B_lib2_all_chr1.forward'
+chr1_reads = fread(reads_file) 
+
+head(chr1_reads)
+```
+
+Adding column names:
+```{r}
+colnames(chr1_reads) = c("Chrom","Loc","FragLen")   
+head(chr1_reads)
+```
+
+Now take a look at a random sample
+```{r}
+chr1_reads[sample(nrow(chr1_reads),10)]
+```
+
+Or look at the summary
+```{r}
+summary(chr1_reads)
+```
+
+We can compare how fast the table is read using a comparison.
+The third variable in the output is the time in seconds from begining of run.
+See ?system.time() for more information.
+
+```{r}
+
+func_fread_time = system.time(fread(reads_file) )
+func_readtable_time = system.time(read.table(reads_file) )
+print(sprintf("Function fread takes %.2f seconds", func_fread_time[3]))
+print(sprintf("Function read.table takes %.2f seconds", func_readtable_time[3]))
+```
+
+An alternative for measuring time is to use `tic` and `toc`
+```{r}
+tictoc::tic()
+for (i in 1:100000) { a = i+ 1}
+tictoc::toc()
+```
+
+Read depth
+---------
+
+\[Average\  Coverage = \frac{Total\ Reads}{Total\ Bases}\]
+\[Average\  Distance = 1/coverage\]
+```{r}
+last_read = chr1_reads[nrow(chr1_reads),"Loc"]
+print(last_read)
+# This doesn't seem to work with data.tabled
+coverage = nrow(chr1_reads)*(1 / last_read)
+# average distance between reads
+avg_dis = 1/coverage
+```
+
+How many reads at each point? 
+Prepare read_line of size N 
+so that read_line[i] is the number of reads beginning at i.
+```{r}
+beg_region = 1
+end_region = 10000000
+N = end_region-beg_region+1
+
+read_line = numeric(N)
+
+for (i in 1:100){
+  read_line[i] = sum(chr1_reads$Loc==(i+beg_region-1))
+}
+```
+
+Measure how long code takes to run.
+Use proc.time when the command is not a one line. 
+It measures current time, and can be subtracted out.
+```{r}
+beg_region = 1
+end_region = 100000
+N = end_region-beg_region+1
+read_line = numeric(N)
+
+tic()
+for (i in 1:100){
+  read_line[i] = sum(chr1_reads$Loc==(i+beg_region-1))
+}
+toc()
+```
+
+
+So we should make this algorithm more efficient. 
+Here is one attempt.  
+```{r}
+beg_region = 1
+end_region = 10000000
+N = end_region-beg_region+1
+read_line = numeric(N)
+
+tic()
+first_read = min(which(chr1_reads$Loc >= beg_region)) 
+r = first_read
+tt = proc.time()
+while (chr1_reads$Loc[r] <= end_region){
+  read_line[chr1_reads$Loc[r]] = read_line[chr1_reads$Loc[r]]+1
+  r = r+1
+}
+toc()
+```
+
+Things to remember when trying to be efficient: 
+
+- Always have a slow implementation that you know is correct before making efficient
+- Check that this is really what you need to optimize
+
+Rewrite as a function
+(this is for you...)
+```{r}
+getReadLine = function(locations, beg_region, end_region){
+  # Assumptions: locations is a sorted vector of beginings
+  # Don't forget - what happens if beg_region is not equal to 1?
+  
+  # Complete....
+  
+  return(line)
+}
+```
+
+
+Summarize counts
+```{r}
+
+read_hist = hist(read_line,breaks = 0:20-0.5)
+text(read_hist$mids,read_hist$counts,read_hist$counts,pos = 3,cex =0.5)
+# pos = 1,2,3,4 moves the value a bit to the bottom,left,top,right
+#    of the scheduled location. See ?text.
+
+```
+
+Is the distribution of reads uniform? 
+That would lead to a Poisson marginal distribution...
+
+So if each start position was sampled from a Poisson, 
+what would this distribution look like?
+
+Recall that Poisson has a single parameter lambda = E[X].
+We can then evaluate the probabilities of each cell...
+
+## These will wait till next week
+
+```{r}
+reg_lambda=sum(read_line)/length(read_line)     # in region
+?dpois
+dpois(0:20,lambda = reg_lambda) # very hard to see the probabilities
+
+obs_prob = read_hist$density
+model_prob = dpois(0:19,lambda = reg_lambda)
+plot(obs_prob, model_prob)
+text(obs_prob, model_prob, 0:19)
+abline(0,1)
+
+plot(log(obs_prob), log(model_prob))
+text(log(obs_prob), log(model_prob),0:19,pos=2)
+abline(0,1)
+# Or
+plot(log(obs_prob), log(model_prob),xlim = c(-90,0),ylim = c(-90,0))
+text(log(obs_prob), log(model_prob),0:19,pos=2)
+abline(0,1)
+
+plot(sqrt(obs_prob), sqrt(model_prob),xlim = c(0,1),ylim = c(0,1))
+text(sqrt(obs_prob), sqrt(model_prob),0:19,pos=2)
+abline(0,1)
+
+```
+
+
+## Binning reads into 5000 bp 
+
+Preparing our read line...
+```{r}
+last_read = as.numeric(last_read)
+N5K = ceiling(last_read/5000)
+
+tic()
+reads_5K= numeric(N5K)
+for (r in 1:nrow(chr1_reads)){
+  # Need to check such dangerous lines...
+  bin5K = 1 + floor((chr1_reads$Loc[r]-1)/5000) 
+  reads_5K[bin5K] = reads_5K[bin5K]+1 
+}
+toc()
+# Check that these are correct
+reads_5K[1]
+chr1_reads[reads_5K[1]+c(-10:10),]
+```
+
+1 dimensional display
+```{r}
+summary(reads_5K)
+boxplot(reads_5K, horizontal = TRUE,ylim = c(0,1000))
+
+```
+
+Identify outliers by looking at marginal distribution
+```{r}
+hist(reads_5K)
+# Can't see anything.
+boxplot(reads_5K)
+boxplot(reads_5K,ylim = c(0,5000))
+boxplot(reads_5K,ylim = c(0,5000),horizontal = TRUE)
+```
+
+```{r}
+h = hist(pmin(reads_5K,1000),breaks = 100)
+
+# find outlier cutoffs:
+bottom_cut = 20
+top_cut = 300
+abline(v=c(20,300),col="red")
+no_outlier = reads_5K>20 &reads_5K<300
+mean(no_outlier) #proportion of non-outlier
+
+# Estimate density of distribution body
+h_no_out = hist(reads_5K[no_outlier],breaks=100)
+
+m_no_outliers =mean(reads_5K[no_outlier])
+abline(v=m_no_outliers,col="red",lw=2)
+```
+
+For this plot, I will want you to compare to the Gaussian distribution
+
+## This will wait till next class
+```{r}
+# compute poisson probabilities and compare to obeserved probabilities...
+pois_probs = dpois(0:660,m_no_outliers)
+# Compare these to the probabilities from the bulk. 
+# What does this model imply for the probability of being between X_i in 100:109?
+sd(reads_5K[no_outlier],na.rm=TRUE)
+```
+
+
+
+```{r}
+plot(reads_5K)
+plot(reads_5K,ylim=c(0,5000))
+plot(reads_5K,ylim=c(0,1000),col = rgb(0,0,0,0.5))
+
+# find only the outlier points (above 1000)
+outlier_above = which(reads_5K>1000)
+points(outlier_above,rep(1000,length(outlier_above)),col=2,cex =0.7)
+
+plot(30000:40000,reads_5K[30000:40000],ylim=c(0,1000),col = rgb(0,0,0,0.5),cex =0.5)
+
+# Add a smoothing line - we'll talk more later in the semester
+lines(loess.smooth(30000:40000,reads_5K[30000:40000]),col=4,lw=3)
+lines(loess.smooth(30000:40000,reads_5K[30000:40000],span = 0.01),col=4,lw=3)
+```
+
+Google "R plots with sliders" and find relevant package
+Use "manipulate" to explore graph. This doesn't work well in Markdown
+
+```{r,eval = FALSE}
+
+pl= 5000
+manipulate(plot(x+(1:pl),reads_5K[x+(1:pl)],ylim = c(0,1000),
+                pch=20,cex =0.8), 
+           x = slider(1, length(reads_5K)-pl+1,200))
+```

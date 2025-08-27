@@ -1,0 +1,461 @@
+---
+title: "Lab Task 7"
+author: "Group 6"
+date: Sys.Date()
+output:
+  html_document:
+    code_folding: show
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+Group members:
+
+- Shawn Yakir , 315714980,  shawn.yakir@mail.huji.ac.il
+- Sarah Levitz, 324673623, sarah.levitz@mail.huji.ac.il
+- Carmel Baris, 318455276, carmel.baris@mail.huji.ac.il 
+
+### Clean the environment
+```{r clean}
+rm(list = ls())
+```
+
+### Libraries used
+
+```{r libraries}
+library('splines')
+library('scales')
+```
+
+
+### Paths
+```{r paths}
+path = "~/Carmel/RProjects/Lab_Benjamini/data"
+# path = "/Users/alevi/Downloads/"
+ # path = "\\Users\\shawn\\Desktop\\"
+```
+
+
+### Load data
+```{r dat}
+load(sprintf("%s/reads_100_A2.rda",path))
+load(sprintf("%s/reads_100_B2.rda",path))
+load(sprintf("%s/GC_100.rda",path))
+GC_100=GC_100[1: (length(reads_100_A2)) ]
+```
+
+### Binning
+```{r binning}
+binsize = 25
+chr2t_mat = matrix(reads_100_A2, nr = binsize)
+# chr2t_mat[,1:2]
+# reads_100_A2[1:2]
+reads2.5K_t2 = colSums(chr2t_mat)
+
+chr2n_mat = matrix(reads_100_B2, nr = binsize)
+# chr2n_mat[,1:2]
+# reads_100_B2[1:2]
+reads2.5K_n2 = colSums(chr2n_mat)
+
+gc_mat = matrix(GC_100,nr=binsize)
+GC2.5K = colMeans(gc_mat)
+```
+
+
+### Outliers
+```{r outliers}
+reads_healthy = reads2.5K_n2
+reads_tumor = reads2.5K_t2
+GC_percent = GC2.5K
+```
+
+### Fitting bspline regression
+```{r fit}
+f = function(X, Y, deg=3, knots=c(0.415, 0.45, 0.54)) {
+  lm(Y ~ bs(X, degree = deg, knots = knots, Boundary.knots = c(min(X), max(X))))
+}
+
+```
+
+
+
+```{r}
+# Plot the normalized data
+set.seed(50)
+samp1 = sample(length(reads_tumor), 10000)
+# Plot adjacent
+par(mfcol = c(2, 1), mar = c(1, 5, 1, 1))
+plot(GC_percent[samp1], reads_tumor[samp1], cex = 0.4, pch = 20, ylab = "Tumor Sample", ylim = c(0, 350000), xlim = c(0.2, 0.75))
+```
+
+
+### Learn parameters from chromosome 1
+
+```{r}
+l_2n = length(reads2.5K_n2_normalized)
+l_2t = length(reads_tumor)
+
+myknots = c(0.415, 0.45, 0.54)
+
+GC=GC2.5K_clean[1:l_2n]
+
+mod_2n = lm(reads2.5K_n2_normalized~bs(GC, degree = 3),subset = reads2.5K_n2_normalized>150000 & reads2.5K_n2_normalized<350000 )
+
+pred_range = seq(0.2,0.75,0.01)
+resp_n = predict(mod_2n,list(GC=pred_range))
+preds2n = predict(mod_2n,list(GC=GC2.5K_clean))
+
+par(mfcol = c(1,1),mar = c(3,5,3,3))
+plot(GC2.5K_clean[samp1],reads2.5K_n2_normalized[samp1],ylim = c(0,350000),xlim = c(0.2,.75), cex = 0.5, pch=20, main = "Healthy 2")
+lines(pred_range, resp_n,col = 4,lw=3)
+lines(pred_range, resp_n,col = 4,lw=3)
+
+```
+
+
+```{r}
+mod_2t = lm(reads_tumor~bs(GC, degree = 3),subset = (reads_tumor>15000)&(reads_tumor<400000))
+
+pred_range = seq(0.2,0.75,0.01)
+resp_t = predict(mod_2t,list(GC=pred_range))
+preds2t = predict(mod_2t,list(GC=GC2.5K_clean))
+
+par(mfcol = c(1,1),mar = c(3,3,3,3))
+plot(GC2.5K_clean[samp1],reads_tumor[samp1],ylim = c(0,350000),xlim = c(.2,.75), cex = 0.5, pch=20, main = "Tumor 2")
+lines(pred_range, resp_t,col = 2,lw=3)
+lines(pred_range, resp_n,col = 4,lw=3)
+```
+
+
+### One sample corrections
+```{r func_fix}
+one_sample_correct = function(samp, preds) {
+  one_correct = (samp)/(preds)
+  return(one_correct)
+}
+```
+
+```{r med_fix}
+corrected_2n = one_sample_correct (reads2.5K_n2_normalized,preds2n[1:l_2n])
+uncorrected_2n = (reads2.5K_n2_normalized)/median(reads2.5K_n2_normalized) 
+
+corrected_2t = one_sample_correct (reads_tumor,preds2t[1:l_2t])
+uncorrected_2t = (reads_tumor)/median(reads_tumor) 
+
+```
+
+
+```{r plot_tn_stacked}
+range_a = (25000000/2500):(30000000/2500)
+
+par(mfcol = c(4,1),mar = c(2,5,2,2))
+
+plot(uncorrected_2n[range_a], ylim = c(0,2.5), cex = 0.5, pch=20, ylab = "Healthy 2", main = "Before Median Fix")
+abline(h=1,col=4)
+plot(uncorrected_2t[range_a], ylim = c(0,2.5), cex = 0.5, pch=20, ylab = "Tumor 2")
+abline(h=1,col=4)
+
+plot(corrected_2n[range_a], ylim = c(0,2.5), cex = 0.5, pch=20, ylab = "Healthy 2", main = "Corrected")
+abline(h=1,col=4)
+plot(corrected_2t[range_a], ylim = c(0,2.5), cex = 0.5, pch=20, ylab = "Tumor 2")
+abline(h=1,col=4)
+
+```
+
+
+### Part 1 Q1: 
+
+We'll start with a breakdown of the variance in the healthy sample after filtering out the outliers and after correcting the median.
+
+```{r}
+# Fit B-spline Model
+l_2n = length(reads2.5K_n2_clean)
+GC = GC2.5K_clean[1:l_2n]
+residuals_2n = reads2.5K_n2_clean - preds2n
+```
+
+```{r}
+### Median Correction
+fixed_2n = reads2.5K_n2_clean / median(reads2.5K_n2_clean)
+
+### Variance Decomposition
+total_variance = var(reads2.5K_n2_normalized)
+poisson_variance = mean(reads2.5K_n2_normalized)/(median(reads2.5K_n2_normalized)^2)
+gc_variance = var(preds2n)
+unexplained_variance = total_variance-poisson_variance-gc_variance
+
+### Percentage of Variance
+percentage_poisson = (poisson_variance / total_variance) * 100
+percentage_gc = (gc_variance / total_variance) * 100
+percentage_unexplained = (unexplained_variance / total_variance) * 100
+```
+
+```{r}
+### Results
+cat("Percentage of variance due to Poisson distribution:", round(percentage_poisson,13), "% < 0.001 %\n")
+cat("Percentage of variance due to GC effect: ", round(percentage_gc,2), "%\n")
+cat("Percentage of variance unexplained: ", round(percentage_unexplained,2), "%\n")
+
+```
+
+
+
+### Part 2 Q1: 
+
+```{r}
+# Fit B-spline Regression Models
+GC_healthy = GC2.5K_clean
+mod_healthy = lm(reads2.5K_n2_clean ~ bs(GC_healthy, degree = 3))
+pred_healthy = predict(mod_healthy, list(GC_healthy = GC_healthy))
+
+# Tumor Sample
+reads2.5K_t2_clean = reads2.5K_t2_clean[1:l_2n]  # Ensure tumor data matches in length
+mod_tumor = lm(reads2.5K_t2_clean ~ bs(GC_healthy, degree = 3))
+pred_tumor = predict(mod_tumor, list(GC_healthy = GC_healthy))
+
+```
+
+```{r}
+# Define the range for predictions
+pred_range = seq(0.2, 0.75, 0.01)
+
+# Predict values over the range for both models
+preds_healthy = predict(mod_healthy, newdata = data.frame(GC_healthy = pred_range))
+preds_tumor = predict(mod_tumor, newdata = data.frame(GC_healthy = pred_range))
+
+```
+
+
+```{r}
+# Combined Plot
+par(mfcol = c(1, 1), mar = c(5, 5, 4, 2))
+
+# Plot the data points first
+plot(GC_healthy, reads2.5K_t2_clean, col = 'darkgray', pch = 20, cex = 0.5, ylab = "Normalized Reads", xlab = "GC Content", main = "Healthy vs Tumor Sample", ylim = c(0,400))
+points(GC_healthy, reads2.5K_n2_clean, col = 'lightgray', pch = 20, cex = 0.5)
+
+# Add the regression lines on top
+lines(pred_range, preds_healthy, col = 'darkblue', lwd = 2)
+lines(pred_range, preds_tumor, col = 'darkred', lwd = 2)
+
+# Add legend
+legend("topright", legend = c("Tumor Sample", "Healthy Sample"), col = c("darkgray", "lightgray"), pch = 20)
+
+```
+
+
+### Spatial Distribution of Normative vs Tumor Reads
+```{r}
+
+par(mfcol = c(2, 1), mar = c(1, 5, 1, 1))
+plot(GC2.5K_clean[samp1], reads2.5K_n2_normalized[samp1], cex = 0.4, pch = 20, ylab = "Healthy 2", ylim = c(0, 350000), xlim = c(0.2, 0.75))
+plot(GC2.5K_clean[samp1], reads_tumor[samp1], cex = 0.4, pch = 20, ylab = "Tumor 2", ylim = c(0, 350000), xlim = c(0.2, 0.75))
+
+# par(mfcol =c(2,1),mar =c(1,1,1,1))
+# set.seed(50)
+# samp1 = sample(length(reads2.5K_n2_clean),50000)
+
+# plot(GC2.5K[samp1],reads2.5K_n2_clean[samp1],ylim = c(0,400),xlim = c(0.2,.75), cex = 0.5, pch=20)
+# plot(GC2.5K[samp1],reads2.5K_t2_clean[samp1],ylim = c(0,400),xlim = c(0.2,.75),cex = 0.5, pch=20)
+
+```
+
+
+
+### Learn parameters from chromosome 1
+
+```{r}
+l_2n = length(reads2.5K_n2_normalized)
+l_2t = length(reads_tumor)
+GC=GC2.5K_clean[1:l_2n]
+length(GC)
+
+```
+
+### Fitting f(GC) for Healthy Sample
+
+```{r}
+
+
+par(mfcol = c(1,1))
+plot(GC2.5K[samp1],reads2.5K_n2[samp1],ylim = c(0,400),xlim = c(0.2,.75), cex = 0.5, pch=20)
+
+# subs_n = reads2.5K_n2_clean>25 & reads2.5K_n2_normalized<400
+mod_2n = lm(reads2.5K_n2_clean~bs(GC,deg = 3,knots = c(seq(0.25,0.6,0.025),0.65), Boundary.knots = c(min(GC),max(GC))))
+
+# regression line
+pred_range = seq(0.2,0.75,0.01)
+resp_n = predict(mod_2n,list(GC=pred_range))
+lines(pred_range, resp_n,col = 4,lw=3)
+
+
+```
+
+
+### Fitting f(GC) for Tumor Sample
+
+```{r}
+GC=GC2.5K[1:l_2t]
+subs_t = reads2.5K_t2>50 & reads2.5K_t2<550
+#subs_t = reads2.5K_t2>50 & reads2.5K_t2<500 &  GC>0.45
+knots_seq = c(seq(0.25,0.6,0.025),0.65)
+mod_2t = lm(reads2.5K_t2_clean~bs(GC,deg = 3,knots = knots_seq))
+
+
+
+pred_range = seq(0.2,0.75,0.01)
+resp_t = predict(mod_2t,list(GC=pred_range))
+resp_n = predict(mod_2n,list(GC=pred_range))
+```
+
+```{r}
+
+par(mfcol = c(1,1))
+
+plot(GC2.5K[samp1],reads2.5K_t2[samp1],ylim = c(0,400),xlim = c(0.2,.75), cex = 0.5, pch=20)
+
+lines(pred_range, resp_n,col = 4,lw=3)
+lines(pred_range, resp_t,col = 6,lw=3)
+legend("topright", legend = c("Healthy Sample", "Tumor Sample"), col = c(4, 6), lty = 1, lwd = 2)
+
+
+```
+
+## One sample corrections (aka only GC & median correction)
+```{r}
+one_sample_gc_correct = function(samp, preds, eps) {
+  one_correct = (samp+eps)/(preds+eps)
+  adj_med = 1/median(one_correct)
+  return(adj_med * one_correct)
+}
+```
+
+```{r}
+# take maximum with 0
+preds1n = pmax(predict(mod_2n,list(GC=GC2.5K)),0)
+preds1t = pmax(predict(mod_2t,list(GC=GC2.5K)),0)
+
+
+# One Sample with espilon, Normative
+eps = 10
+corrected_2n = one_sample_gc_correct(reads2.5K_n2_clean, preds1n[1:l_2n], eps)
+uncorrected_2n = one_sample_gc_correct(reads2.5K_n2_clean, rep(1,length(reads2.5K_n2_clean)), eps)
+
+# One Sample with espilon, Tumor
+eps = 10
+corrected_2t = one_sample_gc_correct (reads2.5K_t2_clean,preds1t[1:l_2t],eps)
+uncorrected_2t = one_sample_gc_correct(reads2.5K_t2_clean,rep(1,length(reads2.5K_t2_clean)),eps)
+```
+
+```{r}
+par(mfcol = c(2,1),mar = c(0.5,5,2,2))
+loc2bin = function(v, bin_size){
+  return((v*1000000)/bin_size)}
+
+bins = loc2bin(c(27,35,75,80),2500)
+discontinuous_range = c(bins[1]:bins[2], bins[3]:bins[4])
+# discontinuous_range = c(10000:14000,15000:16000)
+plot(uncorrected_2t[discontinuous_range], 
+     main = "GC Correction for Tumor Sample",
+     ylab = "Before", xaxt = "n",
+     ylim = c(0,2.5),cex = 0.2,pch=20, xlim = c(0,6000))
+abline(h=1,col=4, lwd = 1.5)
+abline(v=4000,col=6,lt = 2, lwd = 1.2)
+
+# main_text = "GC Correction for Tumor Sample"
+# sub_text = "One-Sample Correction for Tumor Sample"
+# mtext(side=3, line=1, cex=1, main_text)
+# mtext(side=1, line=1, cex=1, sub_text)
+
+plot(corrected_2t[discontinuous_range], 
+     ylab = "After", xaxt = "n",
+     ylim = c(0,2.5),cex = 0.2,pch=20, xlim = c(0,6000))
+abline(h=1,col=4, lwd = 1.5)
+abline(v=4000,col=6,lt = 2, lwd = 1.2)
+
+plot(uncorrected_2n[discontinuous_range], ylab = "Before", xaxt = "n",
+     main = "GC Correction for Healthy Sample",
+     ylim = c(0,2.5),cex = 0.2,pch=20, xlim = c(0,6000))
+abline(h=1,col=4, lwd = 1.5)
+abline(v=4000,col=6,lt = 2, lwd = 1.2)
+plot(corrected_2n[discontinuous_range], ylab = "After", xaxt = "n",
+     ylim = c(0,2.5),cex = 0.2,pch=20, xlim = c(0,6000))
+abline(h=1,col=4, lwd = 1.5)
+abline(v=4000,col=6,lt = 2, lwd = 1.2)
+
+plot(1)
+
+```
+
+
+```{r}
+par(mfcol = c(2,1), mar = c(1,5,1,1))
+# par(mfcol = c(2,1))
+# Plot for Healthy
+plot(corrected_2n[discontinuous_range], ylab = "Healthy", xaxt = "n",
+     main = "After GC Correction ('One Sample')", 
+     ylim = c(0,2), cex = 0.2, pch=20)
+abline(h=1, col=4, lwd = 1.5)
+abline(v=c(1000,1200,4000),col=c(5,5,6), lt=c(1,1,2), lwd = 1.2)
+# Plot for Tumor
+plot(corrected_2t[discontinuous_range], ylab = "Tumor", xaxt = "n",
+     ylim = c(0,2), cex = 0.2, pch=20)
+abline(h=1, col=4, lwd = 1.5)
+abline(v=c(1000,1200,4000),col=c(5,5,6), lt=c(1,1,2), lwd = 1.2)
+plot(1)
+
+```
+
+
+### Two sample corrections ...
+```{r}
+two_sample_correct = function(tumor, normal) {
+  two_correct = (tumor)/(normal)
+  two_correct_aft_med =  two_correct/median(two_correct,na.rm=TRUE)
+  return(two_correct_aft_med)    
+}
+```
+
+### Two sample corrections w/ epsilon
+```{r}
+two_sample_correct_e = function(tumor, normal,eps) {
+  two_correct = (tumor+eps)/(normal+eps)
+  two_correct_aft_med = two_correct/median(two_correct,na.rm=TRUE)
+  return(two_correct_aft_med)
+}
+
+```
+
+
+```{r}
+two_sample_w_gc = two_sample_correct_e(corrected_2t,corrected_2n,0.1)
+two_sample_wout_gc = two_sample_correct_e(uncorrected_2t,uncorrected_2n,0.1)
+
+two_sample_wout_gc = two_sample_correct(uncorrected_2t,uncorrected_2n)
+
+par(mfcol = c(3,1),mar = c(5,2,5,2))
+plot(two_sample_w_gc[discontinuous_range], xaxt = "n", 
+     xlab = "", main = "Three Fixes: Median, GC, Two-Sample w/ Epsilon",
+     ylim = c(0,2),cex = 0.2,pch=20)
+abline(h=1,col=4, lwd = 1.5)
+abline(v=c(1000,1200,4000),col=c(5,5,6), lt=c(1,1,2), lwd = 1.2)
+
+plot(two_sample_wout_gc[discontinuous_range],xaxt = "n",
+     xlab = "", main = "Median + Two-Sample w/ Epsilon",
+     ylim = c(0,2),cex = 0.2,pch=20)
+abline(h=1,col=4, lwd = 1.5)
+abline(v=c(1000,1200,4000),col=c(5,5,6), lt=c(1,1,2), lwd = 1.2)
+
+plot(two_sample_wout_gc[discontinuous_range],xaxt = "n",
+     xlab = "Both Samples, Reads Count per Bin Location (2.5K)",
+     main = "Median + Two-Sample (No Epsilon)",
+     ylim = c(0,2),cex = 0.2,pch=20)
+abline(h=1,col=4, lwd = 1.5)
+abline(v=c(1000,1200,4000),col=c(5,5,6), lt=c(1,1,2), lwd = 1.2)
+
+plot(1)
+```
+
+
+

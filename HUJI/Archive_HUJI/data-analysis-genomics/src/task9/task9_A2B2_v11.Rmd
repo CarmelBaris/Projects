@@ -1,0 +1,1080 @@
+---
+title: "Lab Task 8"
+author: "Group 6"
+date: "`r format(Sys.time(), '%d/%m/%y')`"
+output:
+  html_document:
+    code_folding: show
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+Group members:
+
+- Shawn Yakir , 315714980,  shawn.yakir@mail.huji.ac.il
+- Sarah Levitz, 324673623, sarah.levitz@mail.huji.ac.il
+- Carmel Baris, 318455276, carmel.baris@mail.huji.ac.il 
+
+### Clean the environment
+```{r clean}
+rm(list = ls())
+```
+
+### Libraries used
+
+```{r libraries}
+library('splines')
+library('ggplot2')
+```
+
+
+### Paths
+```{r paths}
+path = "~/Carmel/RProjects/Lab_Benjamini/data"
+# path = "/Users/alevi/Downloads/"
+ # path = "\\Users\\shawn\\Desktop\\"
+```
+
+
+### Functions
+
+Fitting bspline regression:
+
+```{r fit}
+f = function(X, Y, deg=3, knots=c(0.415, 0.45, 0.54), subs) {
+  lm(Y ~ bs(X, degree = deg, knots = knots, Boundary.knots = c(min(X), max(X))),
+     subset = subs)
+}
+
+```
+
+Correcting functions:
+
+```{r correcting_funcs}
+
+### My one sample corrections ...
+
+### Median correction
+fix_med = function(samp) {
+  return(samp/median(samp,na.rm=TRUE))
+}
+
+### One sample correction
+fix_gc_e = function(samp, preds, eps=0) {
+  return((samp+eps)/(preds+eps))
+}
+
+### My two sample correction ...
+fix_2samp_e = function(tumor, healthy, eps=0) {
+  return((tumor+eps)/(healthy+eps))
+}
+
+```
+
+
+### Load data
+
+```{r dat}
+load(sprintf("%s/reads_100_A2.rda",path))
+load(sprintf("%s/reads_100_B2.rda",path))
+load(sprintf("%s/GC_100.rda",path))
+```
+
+
+### Binning
+
+```{r binning}
+binsize = 2500
+
+chr2t_mat = matrix(reads_100_A2, nr = binsize)
+chr2n_mat = matrix(reads_100_B2, nr = binsize)
+GC_100=GC_100[1: (length(reads_100_A2)) ]
+gc_mat = matrix(GC_100,nr=binsize)
+
+reads_tumor = colSums(chr2t_mat)
+reads_healthy = colSums(chr2n_mat)
+GC = colMeans(gc_mat)
+
+l_out = length(reads_healthy)
+
+## ------------------------------------------------
+# rm("chr2n_mat","chr2t_mat","gc_mat","reads_100_A2","reads_100_B2","GC_100") # remove from memory
+```
+
+
+### Plot Setup
+
+```{r clean_env1}
+rm("path", "find_out_boxplot","out_n2","out_reads_xtra","out_t2") # remove from memory
+# rm("GC2.5K", "reads_healthy", "reads_tumor") # remove from memory
+```
+
+```{r colors}
+# color_tumor = rgb(0.8, 0.8, 0.8, 0.6)
+# col_healthy = rgb(0.3, 0.3, 0.3, 0.4)
+
+color_tumor = "gray"
+```
+
+```{r stiched_range}
+loc2bin = function(v, bin_size){
+  return((v*1000000)/bin_size)}
+
+bins = loc2bin(c(25,35,75,80),2500)
+stiched_range = c(bins[1]:bins[2], bins[3]:bins[4])
+
+```
+
+```{r}
+# Create a data frame from the reads_tumor vector
+df <- data.frame(reads_tumor)
+
+# Calculate the mean of the data (lambda for Poisson)
+lambda <- mean(df$reads_tumor)
+
+# Calculate the histogram data
+read_hist <- hist(df$reads_tumor, plot = FALSE)
+df_hist <- data.frame(mids = read_hist$mids, counts = read_hist$counts)
+
+# Function to format the values
+format_labels <- function(x) {
+  if (x >= 1e6) {
+    return(paste0(round(x / 1e6, 2), "M"))
+  } else if (x >= 1e3) {
+    return(paste0(round(x / 1e3, 1), "K"))
+  } else {
+    return(as.character(x))
+  }
+}
+
+# Add formatted count labels to df_hist
+df_hist <- df_hist %>%
+  mutate(FormattedCounts = sapply(counts, format_labels))
+
+# Calculate the Poisson probabilities for the theoretical distribution
+max_bin <- max(df$reads_tumor)
+poisson_df <- data.frame(x = 0:max_bin, prob = dpois(0:max_bin, lambda))
+
+# Create the plot
+p <- ggplot(df_hist, aes(x = mids, y = counts)) +
+  geom_col(fill = "orange") +
+  geom_text(aes(label = FormattedCounts), vjust = -0.5, size = 3.5) +
+  scale_y_continuous(labels = comma, limits = c(0, max(df_hist$counts) * 1.1)) +
+  geom_line(data = poisson_df, aes(x = x, y = prob * sum(read_hist$counts)), color = "blue", size = 1) +
+  labs(title = "Histogram of Occurrences Counts with Poisson Distribution",
+       x = "Count of Fragments Per Bin",
+       y = "Frequency",
+       caption = paste("Mean coverage:", round(lambda, 2))) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, size = 14),
+        axis.title.x = element_text(vjust = -0.5, size = 12),
+        axis.title.y = element_text(vjust = 2, size = 12))
+
+# Display the plot
+print(p)
+
+```
+
+
+```{r}
+read_hist <- hist(reads_tumor, plot = FALSE)
+
+# function to format the values
+format_labels <- function(x) {
+  if (x >= 1e6) {return(paste0(round(x / 1e6, 2), "M"))}
+  if (x >= 1e3) {return(paste0(round(x / 1e3, 1), "K"))} 
+  else {return(as.character(x))
+  }
+}
+
+# define y-axis limits
+y_lim <- c(0, max(read_hist$counts) * 1.1)
+
+# plot the histogram without y-axis
+plot(read_hist, ylim = y_lim, yaxt = "n", 
+     main = "Number of Chrom1 Locations Containing X Reads",
+     xlab = "Read Count (Per Location)", 
+     ylab = "Location Count")
+
+# format y-axis labels
+y_ticks <- axTicks(2)
+formatted_y_ticks <- sapply(y_ticks, format_labels)
+axis(2, at = y_ticks, labels = formatted_y_ticks)
+
+# format histogram labels
+formatted_counts <- sapply(read_hist$counts, format_labels)
+
+# add formatted labels to the histogram
+text(read_hist$mids,
+     read_hist$counts,
+     formatted_counts,
+     pos = 3, cex = 0.65)
+```
+```
+
+
+### Non-Parametric Regression
+
+
+```{r fit_models}
+l_2n = length(reads_healthy)
+l_2t = length(reads_tumor)
+
+myknots = c(0.415, 0.45, 0.54)
+pred_range = seq(0.2,0.75,0.01)
+
+reads_healthy = reads_healthy
+reads_tumor = reads_tumor
+
+subs_n = (reads_healthy>50)&(reads_healthy<350)
+subs_t = (reads_tumor>50)&(reads_tumor<350)
+
+# mod_2n = f(GC, reads_healthy, subs = subs_n)
+# mod_2t = f(GC, reads_tumor, subs = subs_n)
+mod_2n = lm(reads_healthy~bs(GC, degree = 3),subset = subs_n)
+mod_2t = lm(reads_tumor~bs(GC, degree = 3),subset = subs_t)
+
+resp2n = predict(mod_2n,list(pred_range))
+preds_2n = predict(mod_2n,list(GC))
+
+resp2t = predict(mod_2t,list(pred_range))
+preds_2t = predict(mod_2t,list(GC))
+
+```
+
+
+```{r fit_bs}
+# Fit B-spline Regression Models
+mod_healthy = lm(reads_healthy ~ bs(GC, degree = 3))
+
+pred_healthy = predict(mod_healthy, list(GC))
+# Tumor Sample
+reads_tumor_cl = reads_tumor[1:l_2n]  # Ensure tumor data matches in length
+mod_tumor = lm(reads_tumor ~ bs(GC, degree = 3))
+pred_tumor = predict(mod_tumor, list(GC))
+
+```
+
+
+```{r pred_range}
+# Define the range for predictions
+pred_range = seq(0.2, 0.75, 0.01)
+
+# Predict values over the range for both models
+preds_healthy = predict(mod_healthy, newdata = data.frame(GC = pred_range))
+preds_tumor = predict(mod_tumor, newdata = data.frame(GC = pred_range))
+
+```
+
+```{r plot_Ys_GC_tumor}
+# Combined Plot
+par(mfcol = c(1, 1), mar = c(5, 5, 4, 2))
+
+# Plot the data points first
+plot(GC, reads_tumor, col = color_tumor, pch = 20, cex = 0.5, ylab = "Binned Reads (2,500 per bin)", xlab = "GC Content", main = "Reads Count vs. GC Content in Tumor", ylim = c(0,400))
+
+# Add the regression lines on top
+lines(pred_range, preds_tumor, col = 'mediumvioletred', lwd = 2)
+
+# Add legend
+legend("topleft", legend = c("Tumor Sample", "f"), col = c(color_tumor, "mediumvioletred"), pch = c(19,NA), lwd = c(NA,2), bty = "n")
+
+```
+
+```{r}
+hist(reads_tumor, freq = FALSE)
+```
+
+
+```{r}
+read_hist <- hist(reads_tumor, plot = FALSE)
+
+# function to format the values
+format_labels <- function(x) {
+  if (x >= 1e6) {return(paste0(round(x / 1e6, 2), "M"))}
+  if (x >= 1e3) {return(paste0(round(x / 1e3, 1), "K"))} 
+  else {return(as.character(x))
+  }
+}
+
+# define y-axis limits
+y_lim <- c(0, max(read_hist$counts) * 1.1)
+
+# plot the histogram without y-axis
+plot(read_hist, ylim = y_lim, yaxt = "n", 
+     main = "Number of Chrom1 Locations Containing X Reads",
+     xlab = "Read Count (Per Location)", 
+     ylab = "Location Count")
+
+# format y-axis labels
+y_ticks <- axTicks(2)
+formatted_y_ticks <- sapply(y_ticks, format_labels)
+axis(2, at = y_ticks, labels = formatted_y_ticks)
+
+# format histogram labels
+formatted_counts <- sapply(read_hist$counts, format_labels)
+
+# add formatted labels to the histogram
+text(read_hist$mids,
+     read_hist$counts,
+     formatted_counts,
+     pos = 3, cex = 0.65)
+```
+```{r}
+# Create a data frame from the reads_tumor vector
+df <- data.frame(reads_tumor)
+
+# Aggregate bins greater than 5
+df$reads_tumor <- ifelse(df$reads_tumor > 5, 5.5, df$reads_tumor) # Use 5.5 to distinguish the "5+" bin
+
+# Calculate the histogram data
+read_hist <- hist(df$reads_tumor, breaks = c(0, 1, 2, 3, 4, 5, Inf), plot = FALSE)
+df_hist <- data.frame(mids = read_hist$mids, counts = read_hist$counts)
+
+# Function to format the values
+format_labels <- function(x) {
+  if (x >= 1e6) {
+    return(paste0(round(x / 1e6, 2), "M"))
+  } else if (x >= 1e3) {
+    return(paste0(round(x / 1e3, 1), "K"))
+  } else {
+    return(as.character(x))
+  }
+}
+
+# Add formatted count labels to df_hist
+df_hist <- df_hist %>%
+  mutate(FormattedCounts = sapply(counts, format_labels))
+
+# Label for bins
+bin_labels <- c("0", "1", "2", "3", "4", "5+")
+
+# Create the plot
+p <- ggplot(df_hist, aes(x = factor(mids, levels = read_hist$mids, labels = bin_labels), y = counts)) +
+  geom_col(fill = "orange") +
+  geom_text(aes(label = FormattedCounts), vjust = -0.5, size = 3.5) +
+  scale_y_continuous(labels = comma, limits = c(0, max(df_hist$counts) * 1.1)) +
+  labs(title = "Histogram of Occurrences Counts",
+       x = "Count of Fragments Per Bin",
+       y = "Frequency") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, size = 14),
+        axis.title.x = element_text(vjust = -0.5, size = 12),
+        axis.title.y = element_text(vjust = 2, size = 12))
+
+# Display the plot
+print(p)
+
+```
+
+
+```{r}
+# Create a data frame from the reads_tumor vector
+df <- data.frame(reads_tumor)
+
+# Calculate the histogram data
+read_hist <- hist(df$reads_tumor, plot = FALSE)
+df_hist <- data.frame(mids = read_hist$mids, counts = read_hist$counts)
+
+# Function to format the values
+format_labels <- function(x) {
+  if (x >= 1e6) {
+    return(paste0(round(x / 1e6, 2), "M"))
+  } else if (x >= 1e3) {
+    return(paste0(round(x / 1e3, 1), "K"))
+  } else {
+    return(as.character(x))
+  }
+}
+
+# Add formatted count labels to df_hist
+df_hist <- df_hist %>%
+  mutate(FormattedCounts = sapply(counts, format_labels))
+
+# Create the plot
+p <- ggplot(df_hist, aes(x = mids, y = counts)) +
+  geom_col(fill = "orange") +
+  geom_text(aes(label = FormattedCounts), vjust = -0.5, size = 3.5) +
+  scale_y_continuous(labels = comma, limits = c(0, max(df_hist$counts) * 1.1)) +
+  labs(title = "Histogram of Occurrences Counts",
+       x = "Count of Fragments Per Bin",
+       y = "Frequency") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, size = 14),
+        axis.title.x = element_text(vjust = -0.5, size = 12),
+        axis.title.y = element_text(vjust = 2, size = 12))
+
+# Display the plot
+print(p)
+
+```
+
+
+
+```{r}
+
+one_five = reads_tumor < 6
+hist(reads_tumor[one_five])
+hist(reads_tumor[!one_five])
+```
+
+
+
+```{r}
+ # Filter out values for 0-5 and aggregate 5+ as 5+
+Nsingle = length(reads_tumor)
+line_filtered = ifelse(reads_tumor > 5, 5, reads_tumor)
+obs_prob_singl = setNames(numeric(7), c(as.character(0:5), "5+"))
+obs_prob_singl[as.character(0:5)] = table(factor(line_filtered, levels = 0:5))
+obs_prob_singl["5+"] = sum(reads_tumor > 5) / Nsingle
+# obs_prob_singl = round(sum(reads_tumor) / Nsingle, 2)
+obs_prob_single = sum(reads_tumor) / Nsingle # in region
+
+lambda = mean(reads_tumor)  # Mean of observed counts
+
+# Calculate expected probabilites for 0-5 and aggregate the rest as 5+
+
+# Calculate the expected distribution for a uniform Poisson model
+exp_pois_upto5 = dpois(0:5, lambda)
+
+exp_pois_plus5 = sum(dpois(6:max(reads_tumor), lambda))
+
+# join to merged probs object
+expected_prob = c(exp_pois_upto5, exp_pois_plus5)
+
+expected_prob = round(expected_prob, 2) 
+names(expected_prob) = c(as.character(0:5), "5+") # add column names
+obs_prob_singl
+```
+
+
+
+### Comparing the densities in a table:
+```{r}
+
+
+# Round the counts to 5 decimal places
+obs_prob_singl_ = round(obs_prob_singl, 5)
+
+expected_prob_ = round(expected_prob, 5)
+
+# Create a data frame
+prob_df_ = data.frame(
+  pois_val_ = c("expected", "observed"),
+  "0"  = c(expected_prob_[1], obs_prob_singl_[1]),
+  "1"  = c(expected_prob_[2], obs_prob_singl_[2]),
+  "2"  = c(expected_prob_[3], obs_prob_singl_[3]),
+  "3"  = c(expected_prob_[4], obs_prob_singl_[4]),
+  "4"  = c(expected_prob_[5], obs_prob_singl_[5]),
+  "5"  = c(expected_prob_[6], obs_prob_singl_[6]),
+  "5+" = c(expected_prob_[7], obs_prob_singl_[7])
+  )
+
+# Create a data frame rounded to 2 decimal points and display the result
+
+obs_prob_singl = round(obs_prob_singl, 2)
+prob_df = data.frame(
+  "0"  = obs_prob_singl[1],
+  "1"  = obs_prob_singl[2],
+  "2"  = obs_prob_singl[3],
+  "3"  = obs_prob_singl[4],
+  "4"  = obs_prob_singl[5],
+  "5"  = obs_prob_singl[6],
+  "5+" = obs_prob_singl[7]
+  )
+
+print(prob_df, right = TRUE)
+
+
+```
+
+
+### Marginal Distr. (dyplr):
+
+```{r}
+# Define the bins
+bins <- c(0, 1, 2, 3, 4, 5, 6, Inf)
+labels <- c("0", "1", "2", "3", "4", "5", "6+")
+
+# Bin the data
+reads_tumor_binned <- cut(reads_tumor, breaks = bins, labels = labels, right = FALSE, include.lowest = TRUE)
+
+# Calculate the counts for each bin
+counts <- table(reads_tumor_binned)
+total_reads <- length(reads_tumor)
+
+# Calculate the percentages
+percentages <- counts / total_reads
+
+# Format the percentages
+formatted_percentages <- sapply(percentages, function(p) {
+  if (p >= 0.01) {
+    return(sprintf("(%.2f%%)", p * 100))
+  } else if (p < 0.0001) {
+    return("(< 0.01%)")
+  } else {
+    return(sprintf("(%.2f%%)", p * 100))
+  }
+})
+
+# Function to format the counts for display
+format_labels <- function(x) {
+  if (is.na(x)) {
+    return(NA)
+  } else if (x >= 1e6) {
+    return(paste0(round(x / 1e6, 2), "M"))
+  } else if (x >= 1e3) {
+    return(paste0(round(x / 1e3, 2), "K"))
+  } else {
+    return(as.character(x))
+  }
+}
+
+# Format the counts for display
+formatted_counts <- sapply(counts, format_labels)
+
+# Create the data frame for plotting
+plot_data <- data.frame(
+  Bin = factor(names(counts), levels = labels),
+  Count = as.numeric(counts),
+  Percentage = formatted_percentages,
+  FormattedCount = formatted_counts
+)
+
+# Calculate the mean count of reads
+mean_coverage <- mean(reads_tumor)
+
+# Plot the histogram
+ggplot(plot_data, aes(x = Bin, y = Count / total_reads * 100)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  geom_text(aes(label = FormattedCount), vjust = -2) +
+  geom_text(aes(label = Percentage), vjust = 0.5, nudge_y = 1.5) +
+  scale_y_continuous(labels = scales::percent_format(scale = 1), limits = c(0, 100)) +
+  labs(title = "Histogram of Fragment Counts",
+       subtitle = paste("Mean coverage: ", round(mean_coverage, 2)),
+       x = "Count of Fragments Per Bin",
+       y = "Frequency (%)") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 20, color = "black"),
+        plot.subtitle = element_text(size = 14, color = "black"),
+        axis.title.x = element_text(margin = margin(t = 10)),
+        axis.title.y = element_text(margin = margin(r = 10)))
+
+```
+
+```{r}
+# Define the bins
+bins <- c(0, 100, 200, 300, 400, 500, 600, Inf)
+labels <- c("0", "100", "200", "300", "400", "500", "600+")
+
+# Bin the data
+reads_tumor_binned <- cut(reads_tumor, breaks = bins, labels = labels, right = FALSE, include.lowest = TRUE)
+
+# Calculate the counts for each bin
+counts <- table(reads_tumor_binned)
+total_reads <- length(reads_tumor)
+
+# Calculate the percentages
+percentages <- counts / total_reads
+
+# Format the percentages
+formatted_percentages <- sapply(percentages, function(p) {
+  if (p >= 0.01) {
+    return(sprintf("(%.2f%%)", p * 100))
+  } else if (p < 0.0001) {
+    return("(< 0.01%)")
+  } else {
+    return(sprintf("(%.2f%%)", p * 100))
+  }
+})
+
+# Function to format the counts for display
+format_labels <- function(x) {
+  if (is.na(x)) {
+    return(NA)
+  } else if (x >= 1e6) {
+    return(paste0(round(x / 1e6, 2), "M"))
+  } else if (x >= 1e3) {
+    return(paste0(round(x / 1e3, 2), "K"))
+  } else {
+    return(as.character(x))
+  }
+}
+
+# Format the counts for display
+formatted_counts <- sapply(counts, format_labels)
+
+# Create the data frame for plotting
+plot_data <- data.frame(
+  Bin = factor(names(counts), levels = labels),
+  Count = as.numeric(counts),
+  Percentage = formatted_percentages,
+  FormattedCount = formatted_counts
+)
+
+# Calculate the mean count of reads
+mean_coverage <- mean(reads_tumor)
+
+# Plot the histogram
+ggplot(plot_data, aes(x = Bin, y = Count / total_reads * 100)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  geom_text(aes(label = FormattedCount), vjust = -2) +
+  geom_text(aes(label = Percentage), vjust = 0.5, nudge_y = 1.5) +
+  scale_y_continuous(labels = scales::percent_format(scale = 1), limits = c(0, 100)) +
+  labs(title = "Histogram of Fragment Counts",
+       subtitle = paste("Mean coverage: ", round(mean_coverage, 2)),
+       x = "Count of Fragments Per Bin",
+       y = "Frequency (%)") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 20, color = "black"),
+        plot.subtitle = element_text(size = 14, color = "black"),
+        axis.title.x = element_text(margin = margin(t = 10)),
+        axis.title.y = element_text(margin = margin(r = 10)))
+
+```
+
+
+
+```{r}
+# Define the bins
+bins <- c(0, 1, 2, 3, 4, 5, 6, Inf)
+labels <- c("0", "1", "2", "3", "4", "5+")
+
+# Define the bins
+bins <- c(0, 1, 2, 3, 4, 5, 6, Inf)
+labels <- c("0", "1", "2", "3", "4", "5", "6+")
+
+# Bin the data
+reads_tumor_binned <- cut(reads_tumor, breaks = bins, labels = labels, right = FALSE, include.lowest = TRUE)
+
+# Calculate the counts for each bin
+counts <- table(reads_tumor_binned)
+total_reads <- length(reads_tumor)
+
+# Calculate the percentages
+percentages <- counts / total_reads
+
+# Format the percentages
+formatted_percentages <- sapply(percentages, function(p) {
+  if (p >= 0.01) {
+    return(sprintf("%.1f%%", p * 100))
+  } else if (p < 0.0001) {
+    return("< 0.0001%")
+  } else {
+    return(sprintf("%.4f%%", p * 100))
+  }
+})
+
+# Function to format the counts for display
+format_labels <- function(x) {
+  if (is.na(x)) {
+    return(NA)
+  } else if (x >= 1e6) {
+    return(paste0(round(x / 1e6, 1), "M"))
+  } else if (x >= 1e3) {
+    return(paste0(round(x / 1e3, 1), "K"))
+  } else {
+    return(as.character(x))
+  }
+}
+
+# Format the counts for display
+formatted_counts <- sapply(counts, format_labels)
+
+# Create the data frame for plotting
+plot_data <- data.frame(
+  Bin = factor(names(counts), levels = labels),
+  Count = as.numeric(counts),
+  Percentage = formatted_percentages,
+  FormattedCount = formatted_counts
+)
+
+# Calculate the mean count of reads
+mean_coverage <- mean(reads_tumor)
+
+# Plot the histogram
+ggplot(plot_data, aes(x = Bin, y = Count)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  geom_text(aes(label = paste(Percentage, "\n(", FormattedCount, ")", sep = "")), vjust = -0.5) +
+  scale_y_continuous(labels = scales::percent_format(scale = 1)) +
+  labs(title = "Histogram of Fragment Counts",
+       subtitle = paste("Mean coverage: ", round(mean_coverage, 2)),
+       x = "Read Count",
+       y = "Frequency") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 20, color = "black"),
+        plot.subtitle = element_text(size = 14, color = "black"))
+
+```
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+
+# Assuming reads_tumor is a vector containing your data
+# For example:
+# reads_tumor <- c(...)
+
+# Define the bins
+bins <- c(0, 1, 2, 3, 4, 5, 6, Inf)
+labels <- c("0", "1", "2", "3", "4", "5", "6+")
+
+# Bin the data
+reads_tumor_binned <- cut(reads_tumor, breaks = bins, labels = labels, right = FALSE, include.lowest = TRUE)
+
+# Calculate the counts for each bin
+counts <- table(reads_tumor_binned)
+total_reads <- length(reads_tumor)
+
+# Calculate the percentages
+percentages <- counts / total_reads
+
+# Format the percentages
+formatted_percentages <- sapply(percentages, function(p) {
+  if (p >= 0.01) {
+    return(sprintf("(%.2f%%)", p * 100))
+  } else if (p < 0.0001) {
+    return("(< 0.01%)")
+  } else {
+    return(sprintf("(%.2f%%)", p * 100))
+  }
+})
+
+# Function to format the counts for display
+format_labels <- function(x) {
+  if (is.na(x)) {
+    return(NA)
+  } else if (x >= 1e6) {
+    return(paste0(round(x / 1e6, 2), "M"))
+  } else if (x >= 1e3) {
+    return(paste0(round(x / 1e3, 2), "K"))
+  } else {
+    return(as.character(x))
+  }
+}
+
+# Format the counts for display
+formatted_counts <- sapply(counts, format_labels)
+
+# Create the data frame for plotting
+plot_data <- data.frame(
+  Bin = factor(names(counts), levels = labels),
+  Count = as.numeric(counts),
+  Percentage = formatted_percentages,
+  FormattedCount = formatted_counts
+)
+
+# Calculate the mean count of reads
+mean_coverage <- mean(reads_tumor)
+
+# Plot the histogram
+ggplot(plot_data, aes(x = Bin, y = Count)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  geom_text(aes(label = FormattedCount), vjust = -1.5) +
+  geom_text(aes(label = Percentage), vjust = -0.3, nudge_y = 1) +
+  scale_y_continuous(labels = scales::comma_format()) +
+  labs(title = "Histogram of Fragment Counts",
+       subtitle = paste("Mean coverage: ", round(mean_coverage, 2)),
+       x = "Count of Fragments Per Bin",
+       y = "Number of Bins") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 20, color = "black"),
+        plot.subtitle = element_text(size = 14, color = "black"),
+        axis.title.x = element_text(margin = margin(t = 10)),
+        axis.title.y = element_text(margin = margin(r = 10)))
+
+# To control the y-axis limits, you can modify the `limits` argument in `scale_y_continuous`
+# Example to increase the y-axis limit: limits = c(0, 120)
+
+```
+
+
+### Marginal Distr. (tidyr):
+```{r tidyr}
+
+# Create a data frame for the graphical comparison
+comparison_df = data.frame(
+  Count = names(obs_prob_singl),
+  Observed = as.numeric(obs_prob_singl),
+  Expected = as.numeric(expected_prob)
+)
+
+# Reshape data to long format using pivot_longer
+comparison_df_long = comparison_df %>%
+  pivot_longer(cols = c("Observed", "Expected"), names_to = "Type", values_to = "Value")
+
+# Plot
+ggplot(comparison_df_long, aes(x = Count, y = Value, fill = Type)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
+  scale_fill_manual(values = c("Observed" = "darkblue", "Expected" = "lightblue")) +
+  labs(title = "Observed vs Expected Poisson Distribution Probabilities",
+       y = "Probabilities",
+       x = "Read Counts") +
+  theme_minimal()
+
+
+```
+
+### Healthy Fit vs. Tumor Fit
+
+```{r plot_Ys_GC}
+# Histogram of Read Counts
+read_counts <- table(factor(reads_tumor, levels = 0:6))
+read_counts[read_counts > 6] <- 6
+
+ggplot(data.frame(Counts = as.numeric(names(read_counts)), Density = as.numeric(read_counts) / sum(read_counts))) +
+  geom_bar(aes(x = Counts, y = Density), stat = "identity", fill = "skyblue") +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "Marginal Distribution of Read Counts", x = "Read Count", y = "Density") +
+  theme_minimal()
+```
+
+
+```{r plot_Ys_GC}
+# Scatter plot with GC content percentage
+subs_n <- (reads_healthy > 50) & (reads_healthy < 350)
+mod_2n <- lm(reads_healthy ~ bs(GC, degree = 3), subset = subs_n)
+pred_range <- seq(0.2, 0.75, 0.01)
+resp2n <- predict(mod_2n, list(GC = pred_range))
+
+ggplot() +
+  geom_point(aes(x = GC, y = reads_healthy), alpha = 0.5) +
+  geom_line(aes(x = pred_range, y = resp2n), color = "red", size = 1) +
+  labs(title = "Coverage vs GC Content", x = "GC Content Percentage", y = "Coverage") +
+  theme_minimal()
+
+```
+
+
+### One sample fixes
+
+```{r fixing_1samp}
+# take maximum with 0
+preds1n = pmax(predict(mod_2n,list(GC=GC2.5K)),0)
+preds1t = pmax(predict(mod_2t,list(GC=GC2.5K)),0)
+
+eps = 0.3
+
+# One Sample with espilon, Healthy
+fixed_2n_gc_med_eps = fix_med(fix_gc_e(reads_healthy, preds1n[1:l_2n], eps))
+unfixed_2n_gc_med_eps = fix_med(fix_gc_e(reads_healthy, rep(1,l_2n), eps))
+
+# One Sample with espilon, Tumor
+fixed_2t_gc_med_eps = fix_med(fix_gc_e(reads_tumor, preds1t[1:l_2t], eps))
+unfixed_2t_gc_med_eps = fix_med(fix_gc_e(reads_tumor, rep(1,l_2t), eps))
+```
+
+### Two sample fixes
+
+```{r fixing_2samp}
+# after GC fix (no espilon)
+gc_fixed_healthy = fix_med(fix_gc_e(reads_healthy, preds1n[1:l_2n]))
+gc_fixed_tumor = fix_med(fix_gc_e(reads_tumor, preds1t[1:l_2t]))
+
+# before GC fix (no espilon)
+gc_unfixed_healthy = fix_med(fix_gc_e(reads_healthy, rep(1,l_2n)))
+gc_unfixed_tumor = fix_med(fix_gc_e(reads_tumor, rep(1,l_2t)))
+
+med_2samp = fix_med(fix_2samp_e(gc_unfixed_tumor,gc_unfixed_healthy))
+med_2samp_eps0.3_gc = fix_med(fix_2samp_e(gc_fixed_tumor, gc_fixed_healthy, 0.3))
+med_2samp_eps0.3 = fix_med(fix_2samp_e(gc_unfixed_tumor,gc_unfixed_healthy, 0.3))
+med_2samp_epsone = fix_med(fix_2samp_e(gc_unfixed_tumor,gc_unfixed_healthy, 1.0))
+med_2samp_epsten = fix_med(fix_2samp_e(gc_unfixed_tumor,gc_unfixed_healthy,10.0))
+
+
+```
+
+
+### Plotting fixes
+
+
+```{r plot_fixes_1samp_h}
+par(mfcol = c(3,1),mar = c(2,5,2,2))
+
+# No fix for Healthy
+plot(reads_healthy[stiched_range], 
+     main = "Before Any Fix",
+     ylab = "Reads Count",xaxt = "n",
+     ylim = c(0,400), cex = 0.6, pch=20, col = col_healthy)
+# abline(h=1, col=4, lwd = 1.5)
+abline(v=c(750,900,4000),col=c("orange","orange",6), lwd = c(1.7, 1.7, 1.2))
+
+# Med fix for Healthy
+plot(unfixed_2n_gc_med_eps[stiched_range], 
+     ylab = "Number of Copies",xaxt = "n",
+     main = "After Median Fix (Full Width)",
+     ylim = c(0,2), cex = 0.6, pch=20, col = col_healthy)
+abline(h=1, col=4, lwd = 1.5)
+abline(v=c(750,900,4000),col=c("orange","orange",6), lwd = c(1.7, 1.7, 1.2))
+
+# GC fix for Healthy
+plot(fixed_2n_gc_med_eps[stiched_range], 
+     ylab = "Number of Copies",xaxt = "n",
+     main = "After 'One Sample' GC Fix (Full Width)",
+     ylim = c(0,2), cex = 0.6, pch=20, col = col_healthy)
+abline(h=1, col=4, lwd = 1.5)
+abline(v=c(750,900,4000),col=c("orange","orange",6), lwd = c(1.7, 1.7, 1.2))
+
+# ----------------------------------
+```
+
+
+```{r plot_fixes_1samp_t}
+
+par(mfcol = c(3,1),mar = c(2,5,2,2))
+
+# No fix for Tumor
+plot(reads_tumor[stiched_range], 
+     ylab = "Count of Reads (Bins of 2.5K)", xaxt = "n",
+     ylim = c(0,400), cex = 0.6, pch=20, col = color_tumor)
+# abline(h=1, col=4, lwd = 1.5)
+abline(v=c(750,900,4000),col=c("orange","orange",6), lwd = c(1.7, 1.7, 1.2))
+mtext("Selected Locations in Chrom1 (25M-35M, 75M-80M)", side = 1, cex = 0.8)
+# Med fix for Tumor
+plot(unfixed_2t_gc_med_eps[stiched_range], 
+     ylab = "Number of Copies", xaxt = "n",
+     ylim = c(0,2), cex = 0.6, pch=20, col = color_tumor)
+abline(h=1, col=4, lwd = 1.5)
+abline(v=c(750,900,4000),col=c("orange","orange",6), lwd = c(1.7, 1.7, 1.2))
+mtext("Selected Locations in Chrom1 (25M-35M, 75M-80M)", side = 1, cex = 0.8)
+# GC fix for Tumor
+plot(fixed_2t_gc_med_eps[stiched_range], 
+     ylab = "Number of Copies", xaxt = "n",
+     ylim = c(0,2), cex = 0.6, pch=20, col = color_tumor)
+abline(h=1, col=4, lwd = 1.5)
+abline(v=c(750,900,4000),col=c("orange","orange",6), lwd = c(1.7, 1.7, 1.2))
+mtext("Selected Locations in Chrom1 (25M-35M, 75M-80M)", side = 1, cex = 0.8)
+
+plot(1)
+
+```
+
+
+
+### Plotting Iteratively Applyied Fixes
+
+```{r plot_t_1samp2samp}
+par(mfrow=c(4,1), mar = c(1.5,2.5,2.5,2.5), oma = c(3,4,3,4))
+
+verticals = seq(from = 1500, to = 6000, by = 250)
+
+plot(unfixed_2t_gc_med_eps[stiched_range], 
+     ylab = "", xaxt = "n",
+     ylim = c(0,2), xlim = c(0,6000),
+     cex = 1, pch=20, col = col_healthy
+     )
+abline(h=c(0.5,1.5), v=verticals, col= "lightgray", lwd = 0.6)
+abline(v=c(750,900,4000),col=c("orange","orange",6), lt = c(1, 1, 2), lwd = c(1.4, 1.4, 1.3))
+abline(h=1, col=4, lwd = 2)
+mtext("Median", side = 3, cex = 1, col = rgb(0,0,0,0.8), line = 0.5)
+
+## one sample (median + GC correction)
+plot(fixed_2t_gc_med_eps[stiched_range], 
+     main = "",
+     ylab = "", xlab = "", xaxt = "n", ylim = c(0,2), xlim = c(0,6000),
+     cex = 0.9, pch=20, col = col_healthy)
+abline(h=c(0.5,1.5), v=verticals, col= "lightgray", lwd = 0.6)
+abline(h=1, col=4, lwd = 2)
+abline(v=c(750,900,4000),col=c("orange","orange",6), lt = c(1, 1, 2), lwd = c(1.4, 1.4, 1.3))
+mtext("Median & GC", side = 3, cex = 1, col = rgb(0,0,0,0.8), line = 0.5)
+
+plot(med_2samp_eps0.3_gc[stiched_range], 
+     main = "",
+     ylab = "", xlab = "", xaxt = "n", ylim = c(0,2), xlim = c(0,6000),
+     cex = 0.8, pch=20, col = col_healthy)
+abline(h=c(0.5,1.5), v=verticals, col= "lightgray", lwd = 0.6)
+abline(h=1, col=4, lwd = 2)
+abline(v=c(750,900,4000),col=c("orange","orange",6), lt = c(1, 1, 2), lwd = c(1.4, 1.4, 1.3))
+mtext("Median & GC & Two-Samp", side = 3, cex = 1, col = rgb(0,0,0,0.8), line = 0.5)
+
+plot(med_2samp_eps0.3[stiched_range], 
+     main = "",
+     ylab = "", xlab = "", xaxt = "n", ylim = c(0,2), xlim = c(0,6000),
+     cex = 0.7, pch=20, col = col_healthy)
+abline(h=c(0.5,1.5), v=verticals, col= "lightgray", lwd = 0.6)
+abline(v=c(750,900,4000),col=c("orange","orange",6), lt = c(1, 1, 2), lwd = c(1.4, 1.4, 1.3))
+abline(h=1, col=4, lwd = 1.5)
+mtext("Median & Two-Samp", side = 3, cex = 1, col = rgb(0,0,0,0.8), line = 0.5)
+
+## write text on outer margins
+mtext("Comparing Two-Sample Fixes (eps = 0.3)",outer = TRUE, side = 3, line = 1, font = 2)
+mtext("Est. Number of Copies (a hat)", outer = TRUE, side = 2, line = 1, cex = 0.8)
+mtext("Selected Locations in Chrom1 (25M-35M, 75M-80M)", outer = TRUE, side = 1, cex = 0.8, line = 1)
+
+
+dots=c(1,2,3,4,5,6,7,8)
+plot(dots, col=dots, pch=20, cex=4)
+```
+
+
+### Effects of the epsilon
+
+```{r plot_epsilons}
+par(mfrow=c(4,1), mar = c(1.5,2.5,2.5,2.5), oma = c(3,4,3,4))
+
+plot(med_2samp[stiched_range],
+     ylab = "", xaxt = "n",
+     ylim = c(0,2), cex = 0.5, pch=20, col = col_healthy)
+abline(h=1,col=4, lwd = 1.5)
+abline(v=c(750,900,4000),col=c("orange","orange",6), lt = c(1, 1, 2), lwd = c(1.4, 1.4, 1.3))
+mtext("epsilon = 0", line = 1, side = 3, cex = 0.8)
+
+plot(med_2samp_eps0.3[stiched_range],
+     ylab = "", xaxt = "n",
+     ylim = c(0,2), cex = 0.5, pch=20, col = col_healthy)
+abline(h=1,col=4, lwd = 1.5)
+abline(v=c(750,900,4000),col=c("orange","orange",6), lt = c(1, 1, 2), lwd = c(1.4, 1.4, 1.3))
+mtext("epsilon = 0.3", line = 1, side = 3, cex = 0.8)
+
+plot(med_2samp_epsone[stiched_range],
+     ylab = "", xaxt = "n",
+     ylim = c(0,2), cex = 0.5, pch=20, col = col_healthy)
+abline(h=1,col=4, lwd = 1.5)
+abline(v=c(750,900,4000),col=c("orange","orange",6), lt = c(1, 1, 2), lwd = c(1.4, 1.4, 1.3))
+mtext("epsilon = 1", line = 1, side = 3, cex = 0.8)
+
+plot(med_2samp_epsten[stiched_range],
+     ylab = "", xaxt = "n",
+     ylim = c(0,2), cex = 0.5, pch=20, col = col_healthy)
+abline(h=1,col=4, lwd = 1.5)
+abline(v=c(750,900,4000),col=c("orange","orange",6), lt = c(1, 1, 2), lwd = c(1.4, 1.4, 1.3))
+mtext("epsilon = 10", line = 1, side = 3, cex = 0.8)
+
+## write text on outer margins
+mtext("Comparing Epsilons In Two-Sample Fix (w/o GC)",outer = TRUE, side = 3, line = 1, font = 2)
+mtext("Est. Number of Copies (a hat)", outer = TRUE, side = 2, line = 1, cex = 0.8)
+mtext("Selected Locations in Chrom1 (25M-35M, 75M-80M)", outer = TRUE, side = 1, cex = 0.8, line = 1)
+
+
+
+plot(1)
+```
+
+
+### Effects of Two Sample Fixes
+```{r plot_gc_2samp}
+## ----------------------
+par(mfcol = c(2,1), mar = c(2,5,1,1))
+
+plot(med_2samp_eps0.3[stiched_range],
+     main = "Combining GC & Two-Sample (Epsilon = 0.3)",
+     ylab = "Before GC fix", xaxt = "n", xlab = "",
+     ylim = c(0,2),cex = 0.5,pch=20, col = rgb(0.3,0.3,0.3,0.7))
+abline(h=1,col=4, lwd = 1.5)
+abline(v=c(750,900,4000),col=c(5,5,6), lt=c(1,1,2), lwd = 1.2)
+
+plot(med_2samp_eps0.3_gc[stiched_range], 
+     ylab = "After GC fix", xaxt = "n", xlab = "",
+     ylim = c(0,2),cex = 0.5, pch=20, col = rgb(0.3,0.3,0.3,0.7))
+abline(h=1,col=4, lwd = 1.5)
+abline(v=c(750,900,4000),col=c(5,5,6), lt=c(1,1,2), lwd = 1.2)
+mtext("Selected Locations in Chrom1 (25M-35M, 75M-80M)", side = 1, cex = 0.8)
+
+plot(1)
+
+```
+
+
+

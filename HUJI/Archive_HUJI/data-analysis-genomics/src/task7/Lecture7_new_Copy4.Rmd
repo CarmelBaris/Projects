@@ -1,0 +1,195 @@
+---
+title: "Lecture7_new_Original"
+author: "Yuval Benjamini"
+output: html_document
+---
+
+### Library
+```{r}
+library('data.table')
+```
+
+### Paths
+```{r}
+dir_name = "~/Carmel/RProjects/Lab_Benjamini/data"
+# dir_name = "/Users/alevi/Downloads/"
+# dir_name = "\\Users\\shawn\\Desktop\\"
+```
+
+### Functions
+```{r}
+source(file.path(dir_name, "help_funcs.R"))
+helpers = list(loadRData = loadRData, binReads = binReads)
+```
+
+### Load data
+```{r}
+load(sprintf("%s/reads_100_A2.rda",dir_name)) #t(umor)
+load(sprintf("%s/reads_100_B2.rda",dir_name)) #n(ot)
+load(sprintf("%s/GC_100.rda",dir_name))
+```
+
+### Binning
+```{r n_reads}
+binBases100s = function(vec_100,size_in_hundreds){
+  vec_100 = matrix(vec_100, nr = size_in_hundreds)
+  return(colSums(vec_100))
+}
+
+binsize_hundreds = 25
+reads_2.5K_n = binBases100s(reads_100_B2, binsize_hundreds)
+reads_2.5K_t = binBases100s(reads_100_A2, binsize_hundreds)
+GC_2.5K = binBases100s(GC_100, binsize_hundreds)
+if(any(GC_2.5K>1)){GC_2.5K = GC_2.5K / binsize_hundreds} # convert GC_2.5K into percentages
+
+```
+### Removing outliers
+```{r}
+  # bins w/ at least 30% GC content
+cleanData = function(GC_vec,reads_A,reads_B){
+  
+  # outliers of gc percent per bin
+  zeros_GC = GC_vec == 0 #bins w/o GC content
+  small_GC = GC_vec <= 0.3 & GC_vec > 0 #low-GC content bins (<30%)
+  
+  # identify outliers of reads count per bin
+  zscore_A = (reads_A - mean(reads_A)) / sd(reads_A)
+  xtreme_reads_A = abs(zscore_A) > 2
+  
+  zscore_B = (reads_B - mean(reads_B)) / sd(reads_B)
+  xtreme_reads_B = abs(zscore_B) > 2
+  
+  # create new variables without outliers
+  outliers = (zeros_GC | small_GC | xtreme_reads_A | xtreme_reads_B)
+  GC_clean = GC_vec[!outliers]
+  reads_A_clean = reads_A[!outliers]
+  reads_B_clean = reads_B[!outliers]
+
+  return(GC_clean, reads_A_clean, reads_B_clean)
+}
+
+```
+
+### Run manipulate in console
+```{r}
+# library('manipulate')
+# pl = 5000
+# manipulate(plot(x+(1:pl),reads_2.5K_t[x+(1:pl)],ylim = c(0,400),
+#                 pch=20,cex =0.5), 
+#            x = slider(1, length(reads_2.5K_t)-pl+1,200))
+```
+
+
+```{r scatter}
+set.seed(50)
+samp1 = sample(length(reads_2.5K_n),5000)
+
+# mar = c(bottom, left, top, right)
+# margin size specified in inches.
+# The default is c(5, 4, 4, 2) + 0.1.
+par(mfcol =c(2,1),mar =c(1,3,1,1)) #limiting margins truncates labels
+plot(GC_2.5K[samp1],reads_2.5K_n[samp1],ylim = c(0,400),xlim = c(0,.75), cex = 0.4, pch=20, ylab="Healthy Reads", xlab="GC (%)")
+plot(GC_2.5K[samp1],reads_2.5K_t[samp1],ylim = c(0,400),xlim = c(0,.75),cex = 0.4, pch=20,  ylab="Tumor Reads")
+par(mfcol =c(1,1))
+
+```
+
+
+# Learn parameters from chromosome 1
+
+```{r}
+l_1n = length(reads_2.5K_n)
+l_1t = length(reads_2.5K_t)
+
+par(mfcol = c(1,1),mar = c(3,3,3,3))
+plot(GC_2.5K[samp1],reads_2.5K_n[samp1],ylim = c(0,400),xlim = c(0.2,.75), cex = 0.5, pch=20)
+
+GC=GC_2.5K[1:l_1n]
+mod_1n = lm(reads_2.5K_n~poly(GC, degree = 3),subset = reads_2.5K_n>50 & reads_2.5K_n<400 )
+
+pred_range = seq(0.2,0.75,0.01)
+resp_n = predict(mod_1n,list(GC=pred_range))
+lines(pred_range, resp_n,col = 4,lw=3)
+
+preds1n = predict(mod_1n,list(GC=GC_2.5K))
+
+```
+
+
+
+
+
+```{r}
+par(mfcol = c(1,1))
+plot(GC_2.5K[samp1],reads_2.5K_t[samp1],ylim = c(0,400),xlim = c(0.2,.75), cex = 0.5, pch=20)
+
+GC=GC_2.5K[1:l_1t]
+mod_1t = lm(reads_2.5K_t~poly(GC, degree = 3),subset = (reads_2.5K_t>50)&(reads_2.5K_t<500))
+
+pred_range = seq(0.2,0.75,0.01)
+resp_t = predict(mod_1t,list(GC=pred_range))
+lines(pred_range, resp_t,col = 4,lw=3)
+preds1t = predict(mod_1t,list(GC=GC_2.5K))
+
+lines(pred_range, resp_n,col = 2,lw=3)
+
+```
+
+
+
+### One sample corrections
+
+```{r}
+one_sample_correct = function(samp, preds) {
+  one_correct = (samp)/(preds)
+  return(one_correct)
+}
+
+```
+
+
+
+```{r}
+corrected_1n = 
+  one_sample_correct (reads_2.5K_n,preds1n[1:l_1n])
+uncorrected_1n = (reads_2.5K_n)/median(reads_2.5K_n) 
+
+corrected_1t = 
+  one_sample_correct (reads_2.5K_t,preds1t[1:l_1t])
+uncorrected_1t = (reads_2.5K_t)/median(reads_2.5K_t) 
+```
+
+
+
+
+
+```{r}
+par(mfcol = c(2,1),mar = c(2,2,2,2))
+range_a = 5000:4000
+plot(corrected_1t[range_a],
+     ylim = c(0,2.5),cex = 0.5,pch=20,main = "Tumor Corrected")
+abline(h=1,col=4,lw=1.5)
+plot(uncorrected_1t[range_a],
+     ylim = c(0,2.5),cex = 0.5,pch=20,main = "Tumor Uncorrected")
+abline(h=1,col=4,lw=1.5)
+
+```
+
+
+
+
+
+```{r}
+par(mfcol = c(2,1),mar = c(2,2,2,2))
+range_a = 5000:4000
+plot(corrected_1n[range_a],
+     ylim = c(0,2.5),cex = 0.5,pch=20, main = "Healthy Corrected")
+abline(h=1,col=4,lw=1.5)
+plot(uncorrected_1n[range_a],
+     ylim = c(0,2.5),cex = 0.5,pch=20, main = "Healthy Uncorrected")
+abline(h=1,col=4,lw=1.5)
+
+```
+
+
+

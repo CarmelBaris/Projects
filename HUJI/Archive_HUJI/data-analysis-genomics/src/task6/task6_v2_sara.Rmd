@@ -1,0 +1,350 @@
+---
+title: "Lab Task 4: Approx. Regression w/ Piecewise Polynomial Model"
+author: "Group 6"
+date: Sys.Date()
+output:
+  html_document:
+    code_folding: show
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+Group members:
+
+- Shawn Yakir , 315714980, shawnyakir@gmail.com
+- Sarah Levitz, 324673623, sarah.levitz@mail.huji.ac.il
+- Carmel Baris, 318455276, carmel.baris@mail.huji.ac.il 
+
+
+## Setup
+
+```{r setup}
+
+# Clean the environment
+rm(list = ls())
+
+# Load required packages
+library('data.table')
+library('splines')
+
+# Set working directory
+dir_name = "/Users/alevi/Downloads/"
+#dir_name = "~/Carmel/RProjects/Lab_Benjamini/data/"
+
+# Load helper functions
+helpers_file = file.path(dir_name, "help_funcs.R")
+source(helpers_file)
+helpers = list(
+    loadRData = loadRData,
+    fitMet = fitMetrics,
+    binBases = binBases,
+    binReads = binReads,
+    check_ratio = check_proportions,
+    check_overlap = check_overlaps,
+    check_size = check_data_size,
+    fit_bspline = fit_bspline
+    )
+# Load data
+bases_file = file.path(dir_name, "chr1_line.rda")
+chr1_bases = loadRData(bases_file)
+reads_file_all = file.path(dir_name, "TCGA-13-0723-01A_lib2_all_chr1.forward")
+chr1_reads = data.table::fread(reads_file_all)
+colnames(chr1_reads) = c("Chrom", "Loc", "FragLen")
+
+# Preprocess data
+nreads = nrow(chr1_reads)
+myLocations = as.numeric(chr1_reads$Loc)
+last_read = myLocations[nreads]
+binsize = 20000
+bases_20K = binBases(chr1_bases, last_read, binsize)
+GC_20K = bases_20K[, 3] + bases_20K[, 4]
+GC_20K = GC_20K / binsize
+reads_20K = binReads(myLocations, binsize, last_read)
+save(reads_20K, GC_20K, file = file.path(dir_name, "reads_gc_20K.rda"))
+```
+
+```{r outliers}
+# Defining logical vectors for filtering out bins (observations)
+
+# outliers of gc percent per bin
+zeros_GC = GC_20K == 0 #bins w/o GC content
+small_GC = GC_20K <= 0.3 & GC_20K > 0 #low-GC content bins (<30%)
+valid_GC = !(zeros_GC | small_GC) #bins w/ at least 30% GC content
+
+# identify outliers of reads count per bin
+z_scores = (reads_20K - mean(reads_20K)) / sd(reads_20K)
+xtreme_reads = abs(z_scores) > 2
+
+# create new variables without outliers
+outliers = (zeros_GC | small_GC | xtreme_reads)
+reads_20K_clean = reads_20K[!outliers]
+GC_20K_clean = GC_20K[!outliers]
+```
+
+## QUESTION 1: 
+
+```{r split}
+# Set seed for reproducibility
+set.seed(100)
+
+# Division 1: Data into 20 parts and randomly assigning 14 parts to train
+# Fix for Division 1
+n_bins <- length(reads_20K_clean)  # Use the cleaned data
+bins_per_group <- n_bins %/% 20  # Integer division to get bins per group
+extra_bins <- n_bins %% 20       # Remainder to ensure equal-sized groups
+
+# Distribute extra bins (if any) across the groups
+group_sizes <- rep(bins_per_group, 20)
+if (extra_bins > 0) {
+  group_sizes[1:extra_bins] <- group_sizes[1:extra_bins] + 1
+}
+
+# Create the 20 groups
+groups <- split(1:n_bins, rep(1:20, group_sizes))
+
+# Randomly select 14 groups for training and 6 for testing
+train_indices_div1 <- sample(1:20, 14)
+test_indices_div1 <- setdiff(1:20, train_indices_div1)
+
+# Create logical vectors for Division 1
+train_logical_div1 <- rep(FALSE, n_bins)
+test_logical_div1 <- rep(FALSE, n_bins)
+
+train_logical_div1[unlist(groups[train_indices_div1])] <- TRUE
+test_logical_div1[unlist(groups[test_indices_div1])] <- TRUE
+
+# Division 2: Completely random division (70% train, 30% test)
+# Fix for Division 2
+n_samples <- length(reads_20K_clean)  # Make sure to use the cleaned data
+train_indices_div2 <- sample(1:n_samples, 0.7 * n_samples)
+test_indices_div2 <- setdiff(1:n_samples, train_indices_div2)
+
+# Create logical vectors for Division 2
+train_logical_div2 <- rep(FALSE, n_samples)
+test_logical_div2 <- rep(FALSE, n_samples)
+
+train_logical_div2[train_indices_div2] <- TRUE
+test_logical_div2[test_indices_div2] <- TRUE
+
+# Fix for Division 3
+n_samples <- length(reads_20K_clean)  # Make sure to use the cleaned data
+train_indices_div3 <- 1:floor(0.7 * n_samples)
+test_indices_div3 <- (floor(0.7 * n_samples) + 1):n_samples
+
+# Create logical vectors for Division 3
+train_logical_div3 <- rep(FALSE, n_samples)
+test_logical_div3 <- rep(FALSE, n_samples)
+
+train_logical_div3[train_indices_div3] <- TRUE
+test_logical_div3[test_indices_div3] <- TRUE
+
+```
+
+
+```{r}
+# Checking proportions and overlaps again
+props_div1 = helpers$check_ratio(reads_20K_clean[train_logical_div1], reads_20K_clean[test_logical_div1], 14/20)
+cat("Div1 props\n", 
+    "Test proportion:", props_div1$test_ratio, "\n",
+    "Train proportion:", props_div1$train_ratio, "\n",
+    "Expected proportion of train:", props_div1$expected_train_ratio,
+     "\n\n"
+    )
+
+props_div2 = helpers$check_ratio(reads_20K_clean[train_logical_div2], reads_20K_clean[test_logical_div2], 0.7)
+cat("Div2 props\n", 
+    "Test proportion:", props_div2$test_ratio, "\n",
+    "Train proportion:", props_div2$train_ratio, "\n",
+    "Expected proportion of train:", props_div2$expected_train_ratio,
+     "\n\n"
+    )
+
+props_div3 = helpers$check_ratio(reads_20K_clean[train_logical_div3], reads_20K_clean[test_logical_div3], 0.7)
+cat("Div3 props\n", 
+    "Test proportion:", props_div3$test_ratio, "\n",
+    "Train proportion:", props_div3$train_ratio, "\n",
+    "Expected proportion of train:", props_div3$expected_train_ratio,
+     "\n\n"
+    )
+
+cat("\n OVERLAP TEST \n\n")
+overlaps_div1 = helpers$check_overlap(train_indices_div1, test_indices_div1)
+paste0("Has Div1 passed overlap test? ", overlaps_div1)
+
+overlaps_div2 = helpers$check_overlap(train_indices_div2, test_indices_div2)
+paste0("Has Div2 passed overlap test? ", overlaps_div2)
+
+overlaps_div3 = helpers$check_overlap(train_indices_div3, test_indices_div3)
+paste0("Has Div3 passed overlap test? ", overlaps_div3)
+
+cat("\n SIZE TEST\n\n")
+size_div1 = helpers$check_size(train_logical_div1, test_logical_div1, reads_20K_clean)
+paste0("Has Div1 passed size test? ", size_div1)
+
+size_div2 = helpers$check_size(train_logical_div2, test_logical_div2, reads_20K_clean)
+paste0("Has Div2 passed size test? ", size_div2)
+
+size_div3 = helpers$check_size(train_logical_div3, test_logical_div3, reads_20K_clean)
+paste0("Has Div3 passed size test? ", size_div3)
+```
+
+
+
+
+## Q1.b
+
+```{r plot}
+# Subset data for each division
+train_data_div1 <- data.frame(GC_20K = GC_20K_clean[train_logical_div1], reads_20K = reads_20K_clean[train_logical_div1])
+train_data_div2 <- data.frame(GC_20K = GC_20K_clean[train_logical_div2], reads_20K = reads_20K_clean[train_logical_div2])
+train_data_div3 <- data.frame(GC_20K = GC_20K_clean[train_logical_div3], reads_20K = reads_20K_clean[train_logical_div3])
+
+# Define knots for the B-spline
+knots_bs = c(0.415, 0.45, 0.54)
+
+
+# Fit the B-spline model using the train data for each division
+reg_bs_train_div1 <- lm(reads_20K ~ bs(GC_20K, knots = knots_bs, degree = 3, Boundary.knots = c(min(GC_20K_clean), max(GC_20K_clean))), data = train_data_div1)
+reg_bs_train_div2 <- lm(reads_20K ~ bs(GC_20K, knots = knots_bs, degree = 3, Boundary.knots = c(min(GC_20K_clean), max(GC_20K_clean))), data = train_data_div2)
+reg_bs_train_div3 <- lm(reads_20K ~ bs(GC_20K, knots = knots_bs, degree = 3, Boundary.knots = c(min(GC_20K_clean), max(GC_20K_clean))), data = train_data_div3)
+
+# Create new data for prediction
+new_data <- data.frame(GC_20K = seq(min(GC_20K_clean), max(GC_20K_clean), length.out = 1000))
+
+# Predict for each division
+predicted_div1 <- predict(reg_bs_train_div1, newdata = new_data)
+predicted_div2 <- predict(reg_bs_train_div2, newdata = new_data)
+predicted_div3 <- predict(reg_bs_train_div3, newdata = new_data)
+
+# Plot the data and the B-spline regression lines for each division
+plot(GC_20K_clean, reads_20K_clean, pch = 16, cex = 0.5, col = rgb(0, 0, 0, 0.7),
+     xlab = "GC Content (cleaned)", ylab = "Read Counts (cleaned)",
+     xlim = c(min(GC_20K_clean), max(GC_20K_clean)),
+     ylim = c(0, max(reads_20K_clean)),
+     main = "Piecewise Polynomial Regression")
+
+# Plot the B-spline regression lines for each division
+lines(new_data$GC_20K, predicted_div1, col = "blue", lwd = 2)
+lines(new_data$GC_20K, predicted_div2, col = "red", lwd = 2)
+lines(new_data$GC_20K, predicted_div3, col = "green", lwd = 2)
+
+# Add vertical lines to indicate breakpoints
+abline(v = knots_bs, lty = 2, col = "darkgray", lwd = 1.5)
+
+# Add legend
+legend("topleft", legend = c("B-spline Div 1", "B-spline Div 2", "B-spline Div 3"), col = c("blue", "red", "green"), lwd = 2, cex = 0.7)
+```
+
+--------------------------------- week 6
+
+```{r}
+# Select an area of 1000 consecutive cells
+start_idx <- 2000  # You can choose any starting index
+end_idx <- start_idx + 999
+selected_GC_20K <- GC_20K_clean[start_idx:end_idx]
+
+# Estimate the number of copies using the B-spline model
+predicted_reads <- predict(reg_bs_train_div2, newdata = data.frame(GC_20K = selected_GC_20K))
+
+# Show the marginal distribution
+hist(predicted_reads, main = "Marginal Distribution of Predicted Reads", xlab = "Predicted Reads")
+
+# Show the genome-wide distribution
+genome_wide_predicted_reads <- predict(reg_bs_train_div2, newdata = data.frame(GC_20K = GC_20K_clean))
+hist(genome_wide_predicted_reads, main = "Genome-wide Distribution of Predicted Reads", xlab = "Predicted Reads")
+
+# Find a numerical index measuring closeness to 1
+mse <- mean((predicted_reads - 1)^2)
+mse
+
+```
+
+
+--------------------------------- week 5
+
+```{r}
+# Subset test data for each division
+test_data_div1 <- data.frame(GC_20K = GC_20K_clean[test_logical_div1], reads_20K = reads_20K_clean[test_logical_div1])
+test_data_div2 <- data.frame(GC_20K = GC_20K_clean[test_logical_div2], reads_20K = reads_20K_clean[test_logical_div2])
+test_data_div3 <- data.frame(GC_20K = GC_20K_clean[test_logical_div3], reads_20K = reads_20K_clean[test_logical_div3])
+
+# Predict for test data in each division
+test_data_div1$predicted <- predict(reg_bs_train_div1, newdata = test_data_div1)
+test_data_div2$predicted <- predict(reg_bs_train_div2, newdata = test_data_div2)
+test_data_div3$predicted <- predict(reg_bs_train_div3, newdata = test_data_div3)
+
+# Define a function to calculate R-squared, MAE, and MSE
+calculate_metrics <- function(actual, predicted) {
+  r_squared <- 1 - sum((actual - predicted)^2) / sum((actual - mean(actual))^2)
+  mae <- mean(abs(actual - predicted))
+  mse <- mean((actual - predicted)^2)
+  return(list(R_squared = r_squared, MAE = mae, MSE = mse))
+}
+
+# Calculate metrics for train and test data in each division
+metrics_train_div1 <- calculate_metrics(train_data_div1$reads_20K, predict(reg_bs_train_div1, newdata = train_data_div1))
+metrics_test_div1 <- calculate_metrics(test_data_div1$reads_20K, test_data_div1$predicted)
+metrics_train_div2 <- calculate_metrics(train_data_div2$reads_20K, predict(reg_bs_train_div2, newdata = train_data_div2))
+metrics_test_div2 <- calculate_metrics(test_data_div2$reads_20K, test_data_div2$predicted)
+metrics_train_div3 <- calculate_metrics(train_data_div3$reads_20K, predict(reg_bs_train_div3, newdata = train_data_div3))
+metrics_test_div3 <- calculate_metrics(test_data_div3$reads_20K, test_data_div3$predicted)
+
+# Print metrics
+print(metrics_train_div1)
+print(metrics_test_div1)
+print(metrics_train_div2)
+print(metrics_test_div2)
+print(metrics_train_div3)
+print(metrics_test_div3)
+```
+
+```{r}
+# Create plots for each division separately
+
+# Create plots for each division separately
+
+# Division 1
+par(mfrow = c(1, 1))  # Reset to single plot
+plot(train_data_div1$GC_20K, train_data_div1$reads_20K, pch = 16, cex = 0.5, col = rgb(0, 0.5, 1, 0.5),
+     xlab = "GC Content (cleaned)", ylab = "Read Counts (cleaned)",
+     xlim = c(min(GC_20K_clean), max(GC_20K_clean)),
+     ylim = c(0, max(reads_20K_clean)),
+     main = "Division 1: Piecewise Polynomial Regression")
+
+lines(new_data$GC_20K, predicted_div1, col = "blue", lwd = 2)
+points(test_data_div1$GC_20K, test_data_div1$reads_20K, pch = 16, cex = 0.5, col = rgb(1, 0.2, 0.2, 0.5))
+points(test_data_div1$GC_20K, test_data_div1$predicted, pch = 16, cex = 0.5, col = rgb(0.2, 1, 0.2, 0.5))
+
+legend("topleft", legend = c("Train Data", "Test Data Actual", "Test Data Predicted", "B-spline Fit"),
+       col = c(rgb(0, 0.5, 1, 0.5), rgb(1, 0.2, 0.2, 0.5), rgb(0.2, 1, 0.2, 0.5), "blue"), lwd = 2, pch = 16, cex = 0.7)
+
+# Division 2
+plot(train_data_div2$GC_20K, train_data_div2$reads_20K, pch = 16, cex = 0.5, col = rgb(0, 0.5, 1, 0.5),
+     xlab = "GC Content (cleaned)", ylab = "Read Counts (cleaned)",
+     xlim = c(min(GC_20K_clean), max(GC_20K_clean)),
+     ylim = c(0, max(reads_20K_clean)),
+     main = "Division 2: Piecewise Polynomial Regression")
+
+lines(new_data$GC_20K, predicted_div2, col = "blue", lwd = 2)
+points(test_data_div2$GC_20K, test_data_div2$reads_20K, pch = 16, cex = 0.5, col = rgb(1, 0.2, 0.2, 0.5))
+points(test_data_div2$GC_20K, test_data_div2$predicted, pch = 16, cex = 0.5, col = rgb(0.2, 1, 0.2, 0.5))
+
+legend("topleft", legend = c("Train Data", "Test Data Actual", "Test Data Predicted", "B-spline Fit"),
+       col = c(rgb(0, 0.5, 1, 0.5), rgb(1, 0.2, 0.2, 0.5), rgb(0.2, 1, 0.2, 0.5), "blue"), lwd = 2, pch = 16, cex = 0.7)
+
+# Division 3
+plot(train_data_div3$GC_20K, train_data_div3$reads_20K, pch = 16, cex = 0.5, col = rgb(0, 0.5, 1, 0.5),
+     xlab = "GC Content (cleaned)", ylab = "Read Counts (cleaned)",
+     xlim = c(min(GC_20K_clean), max(GC_20K_clean)),
+     ylim = c(0, max(reads_20K_clean)),
+     main = "Division 3: Piecewise Polynomial Regression")
+
+lines(new_data$GC_20K, predicted_div3, col = "blue", lwd = 2)
+points(test_data_div3$GC_20K, test_data_div3$reads_20K, pch = 16, cex = 0.5, col = rgb(1, 0.2, 0.2, 0.5))
+points(test_data_div3$GC_20K, test_data_div3$predicted, pch = 16, cex = 0.5, col = rgb(0.2, 1, 0.2, 0.5))
+
+legend("topleft", legend = c("Train Data", "Test Data Actual", "Test Data Predicted", "B-spline Fit"),
+       col = c(rgb(0, 0.5, 1, 0.5), rgb(1, 0.2, 0.2, 0.5), rgb(0.2, 1, 0.2, 0.5), "blue"), lwd = 2, pch = 16, cex = 0.7)
+
+```

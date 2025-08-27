@@ -1,0 +1,217 @@
+---
+title: "formulas_010724"
+author: "Carmel Baris"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library("splines")
+```
+
+So far we have learned that the distribution of $Y_k$, the coverage of bin $K$, depends on the GC content in that bin. We have assumed a general non-parametric regression model of the form $Y \sim f(GC) + \mathcal{E}$. \n
+
+
+$$
+i \text{ is the location within the chromosome being sequenced}\\
+i = 1,2,\cdots,I \\
+Y_i = \text{Count of Reads in location } I\\
+\Omega(Y_i) = \big\{0,\cdots,J\big\} \\
+X_i=\text{GC content (%) in location } I\\
+\Omega(X_i) = \big\{0,\cdots,1\big\} \\
+j \ \text{ is the serial number of a given Read that starts a sequencing fragment}\\
+j = 0,2,\cdots,J \\
+L_j \ \text{ is the chromosomal location of the } \ j^{\ th} \ \text{ Read}\\
+\text{In other words, } L_j \text{ maps each } j^{\ th} \text{ Read to its location } i:\\
+\Omega(L_j) = \{ {i} \}\\
+Y_i = \sum_{i=1}^{I} \big[𝟙_{L_j=i} \big] \\
+
+\text{For a given location } i \text{ (bin size = 1), we assume that} \  \\
+\text{ the regression model is of the non-parametric form: } \\
+Y \sim f(X) + \mathcal{E} \ \ \\
+\text{where } f(X) \text{ is the regression function that ties the number of reads (Y) to GC-content (X).} \\ 
+
+$$
+
+```{r}
+par(mfrow=c(2,1))
+plot(reads_2.5K_n1, main = "Marginal Distr. of Read Count in Healthy Sample", ylim=c(0,600))
+plot(reads_2.5K_t1, main = "Marginal Distr. of Read Count in Tumor Sample", ylim=c(0,600))
+plot(GC_2.5K, main = "Marginal Distribution of GC Content (%)")
+```
+
+### Marginal distribution of Y_K
+$$
+Y_K = \text{Count of Reads in bin K}\\
+X_K=\text{GC Content (%) in bin K}\\
+K \text{ is the serial number of a given bin}\\
+K = 1,2,\cdots,\frac{\ I}{B} \\
+\text{ (where } B \text{ is the bin size)} \\
+\Omega(X_K) = \Omega(X_i) = \big\{0,\cdots,1\big\} \\
+\Omega(Y_K) = \Omega(Y_i) = \big\{0,\cdots,J\big\} \\
+\Omega(L_j') = \big\{ K \big\} \\
+
+\lambda_K
+
+$$
+
+
+### Regression  
+$$
+\textbf{Regression model is of the form: } 
+Y \sim f(X) + \mathcal{E} \\
+Y_K \sim f(X_K) + \mathcal{E}_K  \\
+Y_K \sim f(X_K) + \mathcal{E}_K \\
+\hat{Y}_K \sim \hat{f}(GC_K) \\
+f(X) = \overline{Y_K} \sim f(GC_K) + \mathcal{E}  \\
+
+\text{To estimate } f(X) \text{ we apply the} \textbf{ Method of Moments (MoM).} \\
+\text{First, we define the dependent variable } f(X) \ \text{ to be a conditional expectation:} \\
+f(X) = E[Y|X=x] \\
+\text{Second, we substitute the conditional expectation with the sample average:} \\
+\hat{f}(X) = \hat{E}[Y|X=x] = E[\hat{Y}|X=x] \\
+\text{Third, we apply OLS by which the line of mean values converges with the regression line. }
+$$
+
+# Piecewise Estimation of f(GC) using BSpline
+To estimate the regression line, we use a B-Spline function, 
+that provides us with a "smooth" continuous piecewise model:
+$$
+\hat{f}(X) = lm \bigg( Y_K \sim bspline(X_K, 3^{rd} \text{ degree, knots = } t_1,t_2,t_3, \dots ) \bigg)\\
+
+$$
+
+
+```{r}
+plot(GC_2.5K, reads_2.5K_n1, ylim = c(0,400))
+lines(GC_2.5K, lm(reads_2.5K_n1~bs(GC_2.5K),subset = !outli))
+```
+
+
+# Piecewise Estimation of f(GC) using BSpline
+## Lesson 7
+We like to talk about the *root* of Mean Squared Errors (RMSE), rather than MSE.
+$$ RMSE( \{ \hat{a}{_{_k}} \}, \vec{\mathbf{1}}) = \sqrt{\frac{1}{b} \sum_{k}^{} \Big(\hat{a}{_{_k}} - \vec{\mathbf{1}}\Big)^2} \\
+{\mathbb{E}}MSE( \{ \hat{a}{_{_k}} \}, \vec{\mathbf{1}}) 
+  = \mathbb{E}_Y \bigg[ MSE\Big( \{ \hat{a}{_{_k}} \},\vec{\mathbf{1}} \Big) \bigg] 
+  = \mathbb{E}_Y \bigg[\frac{1}{b} \sum_{k}^{} \Big(\hat{a}{_{_k}} - \vec{\mathbf{1}}\Big)^2 \bigg]\\
+  = \frac{1}{b} \sum_{k}^{} \mathbb{E}_Y \bigg[\Big(\hat{a}{_{_k}} - \vec{\mathbf{1}}\Big)^2 \bigg]\\
+\mathit{dist} = 
+\sqrt{ \left( \frac{dx}{hx} \right)^{\!\!2} +  \left( \frac{dy}{hy} \right)^{\!\!2} +  \left( \frac{dz}{hz} \right)^{\!\!2}}
+\\
+$$
+Same goes when discussing variance. We prefer to use its root, the standard deviation, as it has significance in regards to deviations from the mean expected value.\n
+
+
+$$
+\begin{equation}
+\text{Var}[X] \overset{\text{def}}{=} E\Big[\big(X - E[X]\big)^2\Big].
+\tag{28.1}
+\end{equation}
+$$
+
+
+
+### fff
+
+Picture the following scenario.
+An oncology specialist comes to our lab and wants to know if her patient has cancer.
+She gives us a sample of the patient's DNA, from the chromosome in question.
+Our task is to categorize this DNA sample as either normative ("Healthy") or cancerous ("Tumor").
+It would have been great to have another sample of the very same patient,
+ from the exact same cellular tissue that was once healthy and is now cancerous. 
+Why? Because then we could compare the count of reads and if we don't get a ratio of 1:1, 
+  we assume that this may indicate that the sample is cancerous.
+Let's write this a bit more formally:
+
+$$ 
+\textbf{What do we expect, if sample } s \textbf{ is healthy?} \\
+    \frac{Y^s}{Y^h} =
+\bigg(
+    \frac{\text{Num. of Reads from Suspected Sample }s}
+         {\text{Num. of Reads from Healthy Sample }h} 
+            \bigg) 
+    \overset{\checkmark}{=} 1
+    \\
+$$
+
+
+Unfortunately, that's not an option. 
+Instead, we can use  statistical tools to estimate the number of reads in a healthy sample.
+The inherent problem of estimation is that there will always be a gap, caused by an unknown factor $\mathcal{E}$.
+Our aim is to minimize the size of that epsilon s.t. it doesn't affect our estimation too much.
+
+To do this, we need to better understand what influences the $Y$, i.e. the Read Count in a given sample.
+In other words, we want to formulate the distribution function of $Y$.
+
+*First Step*
+By looking at the marginal distr. of Read Counts, just for the healthy sample, we see that the Read Count doesn't stay the same.
+Rather it changes for different indices. 
+Since each index represents a location, we understand that the Read Count depends on the location. 
+For example, around the center of the chromosome we see a big drop in the Read Count.
+This means that we have very little reads mapped to those locations.
+The same holds when we look at the Read Count after binning the data into groups of 2.5K bases (below).
+
+```{r marginal_y}
+plot(reads_2.5K_n1, main = "Marginal Distr. of Read Counts (Healthy Sample)", ylim=c(0,600),
+     ylab = "Number of reads in bin number K",
+     xlab = "Location of bin number K (in Chr1)"
+     )
+```
+
+So if someone asks us how many reads is considered "healthy" in bin K, my educated guess would be the expected mean value----?.
+If the sample is indeed healthy, I will expect:
+
+$$ 
+\textbf{What do we expect, if sample s is healthy?} \\
+    \frac{Y^s}{Y^h} 
+      \overset{\lambda_k \sim Unif}{\propto} \frac{Y^s}{{\mathbb{E}_k[Y^h]}} 
+      \approx \frac{Y^s}{{\mathbb{\hat{E}}_k[Y^h]}} 
+      =\frac{Y^s}{\operatorname{med}(Y^h)} 
+    \overset{?}{=} 1
+    \\
+$$
+
+
+$$ 
+\textbf{What do we expect, if sample s is healthy?} \\
+    \frac{Y^s}{Y^h} 
+      \approx \frac{Y^s}{{\mathbb{E}[Y^h]}} 
+      \approx \frac{Y^s}{{\mathbb{\hat{E}}[Y^h]}} 
+      =\frac{Y^s}{\operatorname{median}(Y^h)} 
+    \overset{?}{=} 1
+    \\
+$$
+
+
+We expect to see changes depending on the location of the bin. \n
+Supposedly $Y_K \sim \text{(Location of Bin K)$, but we know this is not true! \n
+If we take GC content into account, the actual read count in bin K is $\ Y_K \sim f(\text{GC}{_{K}}) \cdot \mathcal{E}_{K}$. \n
+And then our estimated read count in bin K is $\hat{Y}_K \sim \hat{f}(\text{GC}_{K})$.
+
+
+
+### Lab 6
+$$
+{Y_k}^n \ \text{ Healthy sample (Normative)} \\
+{Y_k}^t \sim  \ \text{ Tumor sample (Cancerous)} \\
+\lambda_k \ \text{Mean Expected value of number of reads} \\
+\mathcal{E}_K \\
+\gamma^n \neq \gamma^t \ \text{ Poisson "noise"} \\
+\eta^j \ \text{ Joint "noise"} \\
+\text{Assumption: per location } k\in (0,len) \text{ the variances should be the same.} \\
+\text{This means that we expect } \eta^h / \eta^t \approx 1
+$$
+
+After recess:
+
+$$
+\hat{a}_k^{(3.0)} \text{ This is a two-sample estimator that takes GC content into account}\\
+\text{This means that we expect } \eta^h / \eta^t \approx 1 \\
+\text{Problems with estimators that are a if the denominator is close to 0.} \\
+\text{Currently, we will assume that } f_K(GC) \text{ is a constant.}\\
+\text{Problems with estimators that are a if the denominator is close to 0.}\\
+\\
+\hat{a}_k^{(3.0)} = \frac{}{\frac{{Y_k}^n}{{\hat{f}_k}^n{GC}_k}+\mathcal{E}}
+$$

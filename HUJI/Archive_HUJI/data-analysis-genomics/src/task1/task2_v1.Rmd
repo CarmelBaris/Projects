@@ -1,0 +1,141 @@
+---
+title: "Task2"
+date: "27 May 2024"
+output:
+  html_document:
+    code_folding: show
+  pdf_document: default
+editor_options:
+  markdown:
+    wrap: sentence
+---
+
+Group 6 aka 5A:
+ - Shawn Yakir , 315714980, shawnyakir@gmail.com  
+ - Sarah Levitz, 324673623, sarah.levitz@mail.huji.ac.il
+ - Carmel Baris, 318455276, carmel.baris@mail.huji.ac.il
+
+
+### Libraries used
+
+```{r libraries, warning=FALSE, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library('ggplot2')
+library('data.table')
+library('manipulate')
+library('tictoc')
+
+```
+
+
+### Paths and Data
+
+
+```{r data_A, message=FALSE, warning=FALSE}
+
+reads_file = '~/Carmel/RProjects/Lab_Benjamini/data/TCGA-13-0723-10B_lib2_all_chr1.forward'
+# reads_file = "/Users/alevi/Downloads/ATCGA-13-0723-01A_lib2_all_chr1.forward/TCGA-13-0723-01A_lib2_all_chr1.forward"
+chr1_reads = fread(reads_file) 
+colnames(chr1_reads) = c("Chrom","Loc","FragLen")
+```
+
+
+## Introduction 
+
+This week we analyzed a text-based sequencing data file used in Paired End Sequencing. It stores short reads that were generated in a Next Generation Sequencing (NGS) procedure. We attempted to identify trends in the data. To be specific, our focus was on understanding the marginal and spatial distribution of reads along the chromosome fragment being sequenced. \n
+
+To clarify, in our work 'fragments' refers to pieces of the original DNA strand, usually of uniform length, that make up the so-called library. The entire library is then sequenced using NGS and the resulting collection of sequences vary in size and starting point, in relation to the DNA fragment being sequenced. \n
+
+See also “Next Generation Sequencing - a Step-by-Step Guide to DNA Sequencing.” YouTube, 4 Dec. 2022, youtu.be/WKAUtJQ69n8?si=CKGYkR6w69NLurz_. 
+
+## Q1: GetReadLine function
+
+The function takes two inputs: 1) a vector of chromosomal locations for which we have a sequencing reads, and 2) a region of interest along the chromosome (start and end). For the given region, it outputs a vector containing the count of reads mapped to each chromosomal location.
+
+
+```{r getReadLine_func, message=FALSE, warning=FALSE}
+getReadLine = function(locations, beg_region, end_region) {
+  # Initialize the vector to store the counts
+  line = rep(0, end_region - beg_region + 1)
+  
+  # Loop through the locations and increment the count
+  for (loc in locations) {
+    if (loc >= beg_region && loc <= end_region) {
+      line[loc - beg_region + 1] = line[loc - beg_region + 1] + 1
+    }
+  }
+  
+  return(line)
+}
+```
+
+
+Testing the function on 20M bases:
+
+```{r}
+
+locations = chr1_reads$Loc
+
+# Define the beginning and end of the region
+beg_region = 1
+end_region = 20000000
+
+start_time <- proc.time()
+line <- getReadLine(locations, beg_region, end_region)
+end_time <- proc.time()
+
+elapsed_time <- end_time - start_time
+
+# Count non-zero values
+non_zero_count <- sum(line != 0)
+print(paste("Function run time:", round(elapsed_time["elapsed"],2), "seconds"))
+print(paste("Number of fragments:", round(non_zero_count/1000,2), "K"))
+
+```
+
+## Q2: Marginal Distribution of Single Locations Being Sequenced
+
+```{r}
+
+
+# filter out entries that surpass cutoff of 4K counts
+r10K_pmin4K = pmin(reads_10K,6000) 
+
+# create histograms
+h_pmin10k = hist(r10K_pmin4K,breaks = 100)
+
+# find outlier cutoffs:
+btm_cut = 20
+top_cut = 300
+abline(v=c(btm_cut,top_cut),col="red")
+no_outlier = reads_10K>btm_cut &reads_10K<top_cut
+mean(no_outlier) #proportion of non-outlier
+
+# estimate density of distribution body
+h_no_out = hist(reads_10K[no_outlier],breaks=100)
+
+m_no_outliers =mean(reads_10K[no_outlier])
+abline(v=m_no_outliers,col="red",lw=2)
+
+```
+
+
+## Q3 
+
+
+```{r}
+plot(reads_10K,ylim=c(0,7000),col = rgb(0,0,0,0.4), cex=0.7) 
+
+# find and color only the outlier points (freq above 6K)
+outlier_above = which(reads_10K > 6000)
+points(outlier_above,rep(6000,length(outlier_above)),col=2,cex =1.1, pch=20)
+text(outlier_above, labels=paste(outlier_above, sep=","))
+
+```
+
+
+
+## Short summary
+
+It is clear from the data that we have two pairs of bases, in all cases C-G is a stronger pair then A-T. It will be interesting to further research the chromosome based on this understanding. 

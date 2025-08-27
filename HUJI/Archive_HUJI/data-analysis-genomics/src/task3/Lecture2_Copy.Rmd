@@ -1,0 +1,132 @@
+---
+title: "Lecture2"
+author: "Yuval Benjamini"
+date: "21 May, 2024"
+output: html_document
+---
+
+```{r libraries, message=FALSE, warning=FALSE}
+  library('data.table')
+  library('tictoc')
+
+```
+
+## Read the file...
+
+```{r}
+# reads_file = '/Users/yuvalbenjamini/Library/CloudStorage/Dropbox/Courses/Lab/Lab_52568_16/DNAseq/Data/TCGA-13-0723-10B_lib2_all_chr1.forward'
+reads_file = '~/Carmel/RProjects/Lab_Benjamini/data/TCGA-13-0723-10B_lib2_all_chr1.forward'
+# reads_file = '~/Carmel/RProjects/Lab_Benjamini/data/TCGA-13-0723-01A_lib2_all_chr1.forward'
+
+chr1_reads = fread(reads_file) 
+colnames(chr1_reads) = c("Chrom","Loc","FragLen") 
+```
+
+Now take a look at a random sample
+```{r}
+head(chr1_reads) # non-random
+chr1_reads[sample(nrow(chr1_reads),10)] # random
+
+last_read = as.numeric(chr1_reads[nrow(chr1_reads),"Loc"])
+
+# {Average Coverage} = {Total Reads}/{Total Bases}
+avg_coverage = nrow(chr1_reads)*(1 / last_read)
+
+# {Avg Distance btw Reads} = {1}/{Avg Coverage}
+avg_dis = 1/avg_coverage
+```
+
+
+## Preparing our read line...
+Prepare read_line of size N 
+so that read_line[i] is the number of reads beginning at i.
+```{r}
+# Function to get read line
+getReadLine <- function(locations, beg_region, end_region) {
+  line <- rep(0, end_region - beg_region + 1)
+  for (loc in locations) {
+    if (loc >= beg_region && loc <= end_region) {
+      line[loc - beg_region + 1] <- line[loc - beg_region + 1] + 1
+    }
+  }
+  return(line)
+}
+
+locations <- chr1_reads$Loc
+beg_region <- 1
+end_region <- 20000000
+
+# start_time <- proc.time()
+line <- getReadLine(locations, beg_region, end_region)
+# end_time <- proc.time()
+
+# elapsed_time <- end_time - start_time
+```
+
+
+
+
+## Compute poisson probabilities and compare to obeserved probabilities...
+Is the distribution of reads uniform? 
+That would lead to a Poisson marginal distribution...
+
+So if each start position was sampled from a Poisson, 
+what would this distribution look like?
+
+Recall that Poisson has a single parameter lambda = E[X].
+We can then evaluate the probabilities of each cell...
+
+
+```{r}
+reg_lambda = sum(read_line)/length(read_line) # in region
+read_hist = hist(read_line, breaks = 0:40-0.5, plot=FALSE)
+obs_prob = read_hist$density
+model_prob = dpois(0:39,lambda = reg_lambda)
+
+
+plot(obs_prob, model_prob)
+text(obs_prob, model_prob, 0:39)
+abline(0,1)
+# 
+# plot(log(obs_prob), log(model_prob))
+# text(log(obs_prob), log(model_prob),0:19,pos=2)
+# abline(0,1)
+# # Or
+# plot(log(obs_prob), log(model_prob),xlim = c(-90,0),ylim = c(-90,0))
+# text(log(obs_prob), log(model_prob),0:19,pos=2)
+# abline(0,1)
+
+plot(sqrt(obs_prob), sqrt(model_prob),xlim = c(0,1),ylim = c(0,1))
+text(sqrt(obs_prob), sqrt(model_prob),0:19,pos=2)
+abline(0,1)
+
+```
+
+## Comparing to poission
+Binning reads into 5000 bp 
+
+```{r}
+
+N5K = ceiling(length(read_line)/5000)
+
+reads_5K= numeric(N5K)
+for (r in 1:nrow(chr1_reads)){
+  # Need to check such dangerous lines...
+  bin5K = 1+floor((chr1_reads$Loc[r]-1)/5000) 
+  reads_5K[bin5K] = reads_5K[bin5K]+1 
+}
+
+# Check that these are correct
+reads_5K[1]
+chr1_reads[reads_5K[1]+c(-10:10),]
+```
+
+Identify outliers by looking at marginal distribution
+```{r}
+no_outlier = 20<reads_5K & reads_5K<300
+m_no_outliers =mean(reads_5K[no_outlier])
+pois_probs = dpois(0:660,m_no_outliers)
+# Compare these to the probabilities from the bulk. 
+# What does this model imply for the probability of being between X_i in 100:109?
+sd(reads_5K[no_outlier],na.rm=TRUE)
+```

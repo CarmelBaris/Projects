@@ -1,0 +1,196 @@
+```{r}
+library('ggplot2')
+library('data.table')
+library('manipulate')
+
+```
+
+
+
+```{r}
+# Define region and cell size
+start_location <- 10000000
+region_size <- 50000000
+cell_size <- 5000
+num_cells <- region_size / cell_size
+```
+
+
+```{r setup, include=FALSE}
+### READS DATA
+# Load the data (Group A)
+reads_file = '~/Carmel/RProjects/Lab_Benjamini/data/TCGA-13-0723-01A_lib2_all_chr1.forward'
+
+# reads_file = "/Users/alevi/Downloads/ATCGA-13-0723-01A_lib2_all_chr1.forward/TCGA-13-0723-01A_lib2_all_chr1.forward"
+
+chr1_reads = fread(reads_file) 
+colnames(chr1_reads) = c("Chrom","Loc","FragLen")
+
+```
+
+```{r}
+
+### BASES DATA
+# dir_name = "/Users/alevi/Downloads/"
+dir_name = "~/Carmel/RProjects/Lab_Benjamini/data"
+str22_file = sprintf("%s/%s", dir_name, "chr1_line.rda")
+load(str22_file) # chr1_line
+
+# Sequenced nucleobases (A,T,C,G)
+bases <- chr1_line  
+
+if (is.factor(bases)) {
+  bases <- as.character(bases)
+}
+
+bases <- paste(bases, collapse = "")
+
+# Extract the relevant region of the base sequence
+bases_region <- substring(bases, 
+                          start_location, 
+                          start_location + region_size - 1)
+
+
+```
+
+
+```{r}
+# Count CG bases in each cell
+countCGInCell <- function(bases, cell_size) {
+  base_chunks <- strsplit(bases, '')[[1]]
+  length_base_chunks <- length(base_chunks)
+  
+  num_rows <- ceiling(length_base_chunks / cell_size)
+  padded_length <- num_rows * cell_size
+  if (padded_length > length_base_chunks) {
+    base_chunks <- c(base_chunks, rep("N", padded_length - length_base_chunks))
+  }
+  
+  base_matrix <- matrix(base_chunks, ncol = cell_size, byrow = TRUE)
+  cg_counts <- rowSums(base_matrix == "C" | base_matrix == "G")
+  
+  return(cg_counts)
+}
+
+cg_counts <- countCGInCell(bases_region, cell_size)
+
+
+```
+
+```{r}
+# Function to count the number of fragments per bin
+countFragmentsPerBin <- function(locations, cell_size, num_cells, start_location) {
+  bins <- rep(0, num_cells)
+  for (loc in locations) {
+    if (loc >= start_location && loc < start_location + region_size) {
+      bin_index <- ceiling((loc - start_location + 1) / cell_size)
+      bins[bin_index] <- bins[bin_index] + 1
+    }
+  }
+  return(bins)
+}
+
+# Filter chr1_reads for the specified region
+chr1_reads_region <- chr1_reads[Loc >= start_location & Loc < start_location + region_size]
+
+
+
+```
+
+```{r}
+
+# Count fragments per bin
+reads_per_bin <- countFragmentsPerBin(chr1_reads_region$Loc, cell_size, num_cells, start_location)
+
+# Check correlation between CG counts and coverage
+correlation <- cor(cg_counts, reads_per_bin)
+
+# Print the correlation
+cat("Correlation between CG counts and read coverage:", correlation, "\n")
+
+# Create a data frame for plotting
+plot_data <- data.frame(
+  Cell = 1:num_cells,
+  CG_Counts = cg_counts,
+  Reads_Per_Bin = reads_per_bin
+)
+
+# Plot CG counts against the number of reads
+ggplot(plot_data, aes(x = CG_Counts, y = Reads_Per_Bin)) +
+  geom_point() +
+  geom_smooth(method = "lm", col = "blue") +
+  labs(title = "CG Counts vs Reads Per Bin",
+       x = "Number of CG Bases",
+       y = "Number of Reads") +
+  theme_minimal()
+
+```
+
+
+
+Based on the graph, we can see that there is a positive correlation between the count of CG occurrences and the total number of reads. This supports Dohm’s claim. Yet seeing as there is a lot of “noise” around the regression line, the correlation is less significant than the one demonstrated in Dohm’s paper. 
+
+
+
+```{r message=FALSE, warning=FALSE}
+
+# Define bin size
+bin_size = 5000
+
+# Calculate number of bins
+total_length = max(chr1_reads$Loc)
+num_bins = ceiling(total_length / bin_size)
+
+# Create bins
+bins = cut(chr1_reads$Loc, breaks=seq(0, total_length, by=bin_size), include.lowest=TRUE)
+
+# Count fragments per bin
+fragment_counts = table(bins)
+fragment_counts = as.numeric(fragment_counts)
+
+# Filter outliers
+q1 = quantile(fragment_counts, 0.25)
+q3 = quantile(fragment_counts, 0.75)
+iqr = q3 - q1
+lower_bound = q1 - 1.5 * iqr
+upper_bound = q3 + 1.5 * iqr
+filtered_counts = fragment_counts[fragment_counts >= lower_bound & fragment_counts <= upper_bound]
+
+# Estimate mean and variance
+mean_count = mean(filtered_counts)
+var_count = var(filtered_counts)
+
+# Expected variance for Poisson distribution
+lambda = mean_count
+expected_variance = lambda
+
+# Compute Poisson distribution values
+x_vals = seq(0, max(filtered_counts), by=1)
+poisson_vals = dpois(x_vals, lambda)
+
+# Determine y-axis limit
+max_density = max(hist(filtered_counts, breaks=30, plot=FALSE)$density)
+max_poisson_density = max(poisson_vals)
+y_max = max(max_density, max_poisson_density) * 1.1
+
+# Plot histogram of the actual data
+hist(filtered_counts, breaks=30, freq=FALSE, main="Fragment Counts per Bin", xlab="Fragment Count", ylab="Density", ylim=c(0, y_max))
+
+# Overlay Poisson distribution
+lines(x_vals, poisson_vals, col="red")
+
+# Chi-squared test
+observed_counts = hist(filtered_counts, breaks=30, plot=FALSE)$counts
+expected_counts = dpois(0:(length(observed_counts)-1), lambda) * sum(observed_counts)
+
+# Rescale expected counts to match observed counts
+expected_counts = expected_counts / sum(expected_counts) * sum(observed_counts)
+
+chisq_test = chisq.test(observed_counts, p=expected_counts, rescale.p=TRUE)
+
+# Print test results
+print(chisq_test)
+
+
+```
+ 
