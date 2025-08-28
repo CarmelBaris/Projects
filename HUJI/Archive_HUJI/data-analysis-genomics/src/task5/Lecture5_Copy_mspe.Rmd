@@ -1,0 +1,162 @@
+---
+title: "Lecture5"
+author: "Yuval Benjamini"
+date: "11 November 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+We simulate the data from the wrong model, but try to 
+approximate it using polynomials.
+
+```{r}
+# simulate data for polynomial regression
+set.seed(100)
+x = sort(runif(100,-5,5))
+y = sin(x) + 0.5*x + 0.03*x^2 + rnorm(100)
+
+# compare scatter plot of data to plot of true equation
+plot(x,y)
+lines(x,sin(x) + 0.5*x + 0.03*x^2)
+
+```
+
+# Spline regression
+
+## Broken regression as linear model
+
+Set up regions ("knots"):
+
+```{r}
+library('splines')
+
+bspline_mod = lm(y~bs(x,knots = c(-2,2), degree=3))
+
+new = data.frame(x=c(seq(-5,-2.001,len=20),seq(-1.999,1.999,len=30),seq(2.001,5,len=20)))
+
+preds = predict(bspline_mod, new)
+
+plot_sim = function(x,y){
+  plot(x,y)
+  lines(x,sin(x) + 0.5*x + 0.03*x^2)
+  abline(v=c(-2,2), lt=2)
+}
+
+plot_sim(x,y)
+
+lines(new$x, preds,col=4)
+
+```
+
+
+## d=4
+```{r}
+
+plot(x,y)
+
+# For drawing lines, it's important that the x's be sorted.
+draw_line = list(x = seq(-5,5,l = 70))
+lines(x,sin(x) + 0.5*x + 0.03*x^2)
+
+lm_1 = lm(y~x)
+lines(draw_line$x,predict(lm_1,draw_line),lwd=2,col='blue')
+
+lm_4 = lm(y~poly(x,4))
+lines(draw_line$x,predict(lm_4,draw_line),lwd=2,col='gray')
+rmspe_tr = sqrt(mean((y-predict(lm_4,list(x = x)))^2))
+
+set.seed(101)
+xtest = runif(100,-5,5)
+ytest = sin(xtest) + 0.5*xtest + 0.03*xtest^2 + rnorm(100)
+# important for prediction that test data will have the same variable name
+test_dat = data.frame(x=xtest)
+rmspe_test = sqrt(mean((ytest - predict(lm_4,test_dat))^2))
+
+print(sprintf( "RMSPEs d=4: Train %.3f Test %.3f",rmspe_tr,rmspe_test))
+
+```
+
+However, for *independent* test data, we should not expect to see the error decay if we fit ourselves to the training noise. 
+
+```{r}
+set.seed(101)
+xtest = runif(100,-5,5)
+ytest = sin(xtest) + 0.5*xtest + 0.03*xtest^2 + rnorm(100)
+
+# to predict values for a regression on x, it is important to use the same variable name 'x' that was used when fitting the regression.
+
+test_dat = data.frame(x=xtest)
+```
+
+On a technical point, for the `predict` function to 
+work on new data, the names of the variables must be identical. Then, any computations on the formula will be carried out on the new data.
+
+
+Check how well the regression lines work on the test data, 
+first by plotting
+```{r}
+# Check on test
+par(mfcol = c(2,1), mar = c(1,1,1,1))
+plot(x,y,ylim = c(-4,4))
+#lines(x,sin(x) + 0.5*x + 0.03*x^2)
+lines(draw_line$x,predict(lm_4,draw_line),lwd=2,col='gray')
+
+plot(xtest,ytest,ylim = c(-4,4))
+#lines(x,sin(x) + 0.5*x + 0.03*x^2)
+lines(draw_line$x,predict(lm_4,draw_line),lwd=2,col='gray')
+
+```
+
+Then by looking at r-mspe:
+
+```{r}
+# Check on test
+rmspe_tr = sqrt(mean((y-predict(lm_4,list(x = x)))^2))
+rmspe_test = sqrt(mean((ytest-predict(lm_4,test_dat))^2))
+
+print(sprintf( "RMSPEs d=4: Train %.3f Test %.3f",rmspe_tr,rmspe_test))
+```
+
+Can we do too much? See d=17
+```{r}
+# d=17
+lm_17 = lm(y~poly(x, 17) )
+plot(x,y)
+lines(x,sin(x) + 0.5*x + 0.03*x^2)
+lines(draw_line$x,predict(lm_17,draw_line),lwd=2,col='gray')
+```
+
+Here RMSPE shows the overfit
+
+```{r}
+# Check on test
+rmspe_tr = sqrt(mean((y-predict(lm_17,list(x = x)))^2))
+rmspe_test = sqrt(mean((ytest-predict(lm_17,test_dat))^2))
+
+print(sprintf( "RMSPEs d=17: Train %.3f Test %.3f",rmspe_tr,rmspe_test))
+```
+
+## What happens if we take test data differently?
+
+## d=3
+```{r}
+set.seed(200)
+new_train = list(x = sort(runif(100,-5,0)))
+new_train$y = sin(new_train$x) + 0.5*new_train$x + 0.03*new_train$x^2 + rnorm(100)
+
+new_test = list(x = sort(runif(100,0,5)))
+new_test$y = sin(new_test$x) + 0.5*new_test$x + 0.03*new_test$x^2 + rnorm(100)
+    
+lm_3 = lm(y~poly(x,3))
+lm_3b = lm(y~poly(x,3), data = new_train)
+plot(new_train$x,new_train$y, xlim = c(-5,5), ylim= c(-4,4))
+points(new_test$x,new_test$y, col = 2)
+lines(x,sin(x) + 0.5*x + 0.03*x^2)
+lines(draw_line$x,predict(lm_3,draw_line),lwd=2,col='green')
+lines(draw_line$x,predict(lm_3b,draw_line),lwd=2,col='blue')
+
+```
+

@@ -1,0 +1,681 @@
+---
+title: "Lab Task 4: Approx. Regression w/ Piecewise Polynomial Model"
+author: "Group 6"
+date: Sys.Date()
+output:
+  html_document:
+    code_folding: show
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+Group members:
+
+- Shawn Yakir , 315714980, shawnyakir@gmail.com
+- Sarah Levitz, 324673623, sarah.levitz@mail.huji.ac.il
+- Carmel Baris, 318455276, carmel.baris@mail.huji.ac.il 
+
+
+## Setup
+
+```{r setup}
+
+# Clean the environment
+rm(list = ls())
+
+# Load required packages
+library('data.table')
+library('splines')
+
+# Set working directory
+# dir_name = "/Users/alevi/Downloads/"
+dir_name = "~/Carmel/RProjects/Lab_Benjamini/data/"
+
+# Load helper functions
+helpers_file = file.path(dir_name, "help_funcs.R")
+source(helpers_file)
+helpers = list(
+    loadRData = loadRData,
+    fitMet = fitMetrics,
+    binBases = binBases)
+
+# Load data
+bases_file = file.path(dir_name, "chr1_line.rda")
+chr1_bases = loadRData(bases_file)
+reads_file_all = file.path(dir_name, "TCGA-13-0723-01A_lib2_all_chr1.forward")
+chr1_reads = data.table::fread(reads_file_all)
+colnames(chr1_reads) = c("Chrom", "Loc", "FragLen")
+
+# Preprocess data
+nreads = nrow(chr1_reads)
+myLocations = as.numeric(chr1_reads$Loc)
+last_read = myLocations[nreads]
+binsize = 20000
+bases_20K = binBases(chr1_bases, last_read, binsize)
+GC_20K = bases_20K[, 3] + bases_20K[, 4]
+GC_20K = GC_20K / binsize
+reads_20K = binReads(myLocations, binsize, last_read)
+save(reads_20K, GC_20K, file = file.path(dir_name, "reads_gc_20K.rda"))
+```
+
+
+
+## QUESTION 1: 
+
+
+
+
+```{r split}
+# Create indices for dividing the data
+set.seed(100)  # For reproducibility
+
+# Division 1: Data into 20 parts and randomly assigning 14 parts to train
+n_parts = 20
+indices = 1:n_parts
+train_indices_div1 = sample(indices, 14)
+test_indices_div1 = setdiff(indices, train_indices_div1)
+
+# Create train and test sets for Division 1
+train_div1 = reads_20K[train_indices_div1]
+test_div1 = reads_20K[test_indices_div1]
+
+# Division 2: Completely random division (70% train, 30% test)
+n_samples = length(reads_20K)
+train_indices_div2 = sample(1:n_samples, 0.7 * n_samples)
+test_indices_div2 = setdiff(1:n_samples, train_indices_div2)
+
+# Create train and test sets for Division 2
+train_div2 = reads_20K[train_indices_div2]
+test_div2 = reads_20K[test_indices_div2]
+
+# Division 3: Regular division (first 70% train, last 30% test)
+train_indices_div3 = 1:floor(0.7 * n_samples)
+test_indices_div3 = (floor(0.7 * n_samples) + 1):n_samples
+
+# Create train and test sets for Division 3
+train_div3 = reads_20K[train_indices_div3]
+test_div3 = reads_20K[test_indices_div3]
+
+split_file1 = file.path(dir_path=dir_name,"train_test_div1.rda")
+split_file2 = file.path(dir_path=dir_name,"train_test_div2.rda")
+split_file3 = file.path(dir_path=dir_name,"train_test_div3.rda")
+save(reads_20K, GC_20K,file = split_file1)
+save(reads_20K, GC_20K,file = split_file2)
+save(reads_20K, GC_20K,file = split_file3)
+```
+
+
+
+```{r load_split}
+# Load the train and test sets
+load(file.path(dir_name, "train_test_div1.rda"))
+load(file.path(dir_name, "train_test_div2.rda"))
+load(file.path(dir_name, "train_test_div3.rda"))
+```
+
+
+## Sanity QA of Splitting Process
+
+```{r qa_split}
+# Check Proportions
+check_proportions = function(train, test, expected_train_ratio) {
+  total = length(train) + length(test)
+  train_ratio = length(train) / total
+  test_ratio = length(test) / total
+  list(train_ratio = train_ratio, test_ratio = test_ratio, expected_train_ratio = expected_train_ratio)
+}
+
+# Division 1
+proportions_div1 = check_proportions(train_div1, test_div1, 14/20)
+cat("Div1 proportions\n", 
+    "Test proportion:", proportions_div1$test_ratio, "\n",
+    "Train proportion:", proportions_div1$train_ratio, "\n",
+    "Expected proportion of train:", proportions_div1$expected_train_ratio,
+     "\n\n"
+    )
+
+# Division 2
+proportions_div2 = check_proportions(train_div2, test_div2, 0.7)
+cat("Div2 proportions\n", 
+    "Test proportion:", proportions_div2$test_ratio, "\n",
+    "Train proportion:", proportions_div2$train_ratio, "\n",
+    "Expected proportion of train:", proportions_div2$expected_train_ratio,
+     "\n\n"
+    )
+
+# Division 3
+proportions_div3 = check_proportions(train_div3, test_div3, 0.7)
+cat("Div3 proportions\n", 
+    "Test proportion:", proportions_div3$test_ratio, "\n",
+    "Train proportion:", proportions_div3$train_ratio, "\n",
+    "Expected proportion of train:", proportions_div3$expected_train_ratio,
+     "\n\n"
+    )
+
+# Check for Overlaps
+check_overlaps = function(train_indices, test_indices) {
+  overlaps = intersect(train_indices, test_indices)
+  length(overlaps) == 0  # Should be TRUE if there are no overlaps
+}
+
+# Division 1
+overlaps_div1 = check_overlaps(train_indices_div1, test_indices_div1)
+paste0("Has Div1 passed overlap test? ", overlaps_div1)
+
+# Division 2
+overlaps_div2 = check_overlaps(train_indices_div2, test_indices_div2)
+paste0("Has Div2 passed overlap test? ", overlaps_div2)
+
+# Division 3
+overlaps_div3 = check_overlaps(train_indices_div3, test_indices_div3)
+paste0("Has Div3 passed overlap test? ", overlaps_div3)
+
+# Check Data Integrity
+check_data_integrity = function(train, test, original_data) {
+  total_train_test = length(train) + length(test)
+  original_length = length(original_data)
+  total_train_test == original_length  # Should be TRUE if the data integrity is maintained
+}
+
+# Load original data again for checking integrity
+reads_20K = binReads(myLocations, binsize, last_read)
+
+# Division 1
+data_integrity_div1 = check_data_integrity(train_div1, test_div1, reads_20K)
+print(data_integrity_div1)
+
+# Division 2
+data_integrity_div2 = check_data_integrity(train_div2, test_div2, reads_20K)
+print(data_integrity_div2)
+
+# Division 3
+data_integrity_div3 = check_data_integrity(train_div3, test_div3, reads_20K)
+print(data_integrity_div3)
+
+```
+
+
+
+## Q1.b+c+d
+
+```{r fit}
+# Fit Spline Regression using Natural Splines
+fit_spline_ns = function(train_data, test_data, knots) {
+  n = length(train_data)
+  x_train = 1:n
+  x_test = (n + 1):(n + length(test_data))
+  
+  # Standardize x values
+  x_train_scaled = scale(x_train)
+  x_test_scaled = scale(x_test, center = attr(x_train_scaled, "scaled:center"), scale = attr(x_train_scaled, "scaled:scale"))
+  
+  # Fit natural spline regression model
+  spline_model = lm(train_data ~ bs(x_train_scaled, knots = knots))
+  
+  # Predict on test data
+  predicted_train = predict(spline_model, newdata = data.frame(x_train_scaled = x_train_scaled))
+  predicted_test = predict(spline_model, newdata = data.frame(x_train_scaled = x_test_scaled))
+  
+  # Calculate fit metrics
+  metrics_train = fitMetrics(train_data, predicted_train)
+  metrics_test = fitMetrics(test_data, predicted_test)
+  
+  list(model = spline_model, predicted_train = predicted_train, predicted_test = predicted_test, metrics_train = metrics_train, metrics_test = metrics_test)
+}
+```
+
+
+```{r compare}
+# Define knots (e.g., at 1/4, 1/2, and 3/4 of the data range)
+knots_ns = c(-0.67, 0, 0.67)  # Standardized positions for knots
+
+# Division 1
+spline_div1_ns = fit_spline_ns(train_div1, test_div1, knots_ns)
+print("Division 1: Train Metrics")
+print(spline_div1_ns$metrics_train)
+print("Division 1: Test Metrics")
+print(spline_div1_ns$metrics_test)
+
+# Division 2
+spline_div2_ns = fit_spline_ns(train_div2, test_div2, knots_ns)
+print("Division 2: Train Metrics")
+print(spline_div2_ns$metrics_train)
+print("Division 2: Test Metrics")
+print(spline_div2_ns$metrics_test)
+
+# Division 3
+spline_div3_ns = fit_spline_ns(train_div3, test_div3, knots_ns)
+print("Division 3: Train Metrics")
+print(spline_div3_ns$metrics_train)
+print("Division 3: Test Metrics")
+print(spline_div3_ns$metrics_test)
+
+# Plotting the results for visual inspection
+plot_results_ns = function(train_data, test_data, predicted_train, predicted_test, title) {
+  n = length(train_data)
+  x_train = 1:n
+  x_test = (n + 1):(n + length(test_data))
+  
+  plot(1:(length(train_data) + length(test_data)), c(train_data, test_data), type = 'n', main = title, xlab = "Index", ylab = "Read Counts", ylim = range(c(train_data, test_data, predicted_train, predicted_test), na.rm = TRUE))
+  lines(x_train, train_data, col = 'blue', lwd = 2)
+  lines(x_test, test_data, col = 'green', lwd = 2)
+  lines(x_train, predicted_train, col = 'red', lwd = 2, lty = 2)
+  lines(x_test, predicted_test, col = 'orange', lwd = 2, lty = 2)
+  legend("topright", legend = c("Train Data", "Test Data", "Predicted Train", "Predicted Test"), col = c("blue", "green", "red", "orange"), lty = c(1, 1, 2, 2), lwd = 2)
+}
+
+plot_results_ns(train_div1, test_div1, spline_div1_ns$predicted_train, spline_div1_ns$predicted_test, "Division 1: Natural Spline Regression")
+plot_results_ns(train_div2, test_div2, spline_div2_ns$predicted_train, spline_div2_ns$predicted_test, "Division 2: Natural Spline Regression")
+plot_results_ns(train_div3, test_div3, spline_div3_ns$predicted_train, spline_div3_ns$predicted_test, "Division 3: Natural Spline Regression")
+```
+
+
+
+# OLD CODE
+
+```{r warning=FALSE}
+
+## ------------------------------------------------
+## ---- LOAD FILE OF NUCLEO_BASES (A,T,C,G)
+bases_file = file.path(dir_name, "chr1_line.rda")
+chr1_bases = helpers$loadRData(bases_file) #like Lecture1
+
+
+## ------------------------------------------------
+## ---- LOAD FILE OF READS LOCATIONS (THAT START A FRAGMENT)
+  
+reads_file_all = file.path(dir_name,"TCGA-13-0723-01A_lib2_all_chr1.forward")
+chr1_reads = data.table::fread(reads_file_all) #like Lecture2
+colnames(chr1_reads) = c("Chrom","Loc","FragLen")   
+
+
+```
+
+
+## Preprocessing data 
+
+```{r message=FALSE, warning=FALSE}
+
+## chunk should not have eval = FALSE!!
+## o/w it messes up GC_20K
+
+nreads = nrow(chr1_reads)
+myLocations = as.numeric(chr1_reads$Loc)
+last_read = myLocations[nreads]
+
+binsize = 20000
+
+## ------------------------------------------------
+## ---- BINNING NUCLEO_BASES DATA
+##
+# per bin, count occurrences of each letter
+bases_20K = binBases(chr1_bases, last_read, binsize) 
+
+# per bin, sum occurrence counts of C & G only (GC content)
+GC_20K <<- bases_20K[, 3] + bases_20K[, 4] #store as global variable
+
+# convert GC_20K into percentages
+if(any(GC_20K>1)){ # This makes sure I don't repeat the command
+  GC_20K = GC_20K / binsize
+}
+
+## ------------------------------------------------
+## ---- BINNING READS COVERAGE DATA
+
+# per bin, calculate reads coverage 
+reads_20K = binReads(myLocations,binsize,last_read)
+save(reads_20K, GC_20K,file = file.path(dir_path=dir_name,"reads_gc_20K.rda"))
+
+# load data
+reads_file_20K = file.path(dir_name, "reads_gc_20K.rda")
+reads_gc_20K = helpers$loadRData(reads_file_20K)
+# access using `$`:
+#   GC_20K = reads_gc_20K$GC_20K
+#   reads_20K = reads_gc_20K$reads_20K
+
+
+
+## ------------------------------------------------
+## ---- CLEARING UP ENV
+rm("chr1_bases","chr1_reads") # remove from memory
+
+```
+
+
+
+## Identify outliers from datasets of reads count and GC content
+
+```{r}
+num_ttl = length(GC_20K) #total observations before removing outliers
+
+# Identify 
+zero_GCs = GC_20K == 0 #logical vector
+num_zro = sum(zero_GCs) # yields 1074 observations
+
+# Find outliers of small GC content
+small_GCs = GC_20K[!zero_GCs] < 0.3 #logical vector yields 49 observations
+num_sml = sum(small_GCs)
+
+# How many are there?
+cat("Out of", num_ttl, "observations in total,\n",
+    "there are", round(num_zro,2),
+       "cells without any G's or C's,\n",
+    " as well as", round(num_sml,2),
+       "cells with less than 30% GC content.\n\n")
+
+mean_gc = round(mean(small_GCs),4)
+
+cat("For cells that contain a few G's or C's, the average value is", 
+    mean_gc, ",\n",
+    "which means that the GC content in those cells is only", 
+    mean_gc*100, "%. \n\n"
+    )
+
+cat("The outliers with no GC content make up", 
+    round(100*(num_zro/num_ttl),2), "% of the data. \n")
+
+cat("The outliers with less than 30% GC content make up", 
+    round(100*(num_sml/num_ttl),2), "% of the data. \n")
+
+cat("Together these outliers make up", 
+    round(100*((num_sml+num_zro)/num_ttl),2), "% of the data. \n\n")
+```
+
+### Plotting the outliers
+```{r}
+col_line = rep("gray", length(GC_20K))
+col_line[small_GCs] = rgb(1, .85, .3, 1)
+col_line[zero_GCs] = "indianred1"
+
+pch_line = rep(1, length(GC_20K))
+pch_line[zero_GCs] = 16
+pch_line[small_GCs] = 16
+
+cex_line = rep(0.3, length(GC_20K))
+cex_line[zero_GCs] = 1
+cex_line[small_GCs] = 1
+
+
+plot(GC_20K, pch = pch_line, col = col_line, cex = cex_line,
+     xlab = "Location in Chr1", ylab = "GC Content", main = "GC Content Per Location")
+```
+
+```{r}
+# Removing the outliers
+GC_20K_clean = (GC_20K[!zero_GCs])[!small_GCs]
+reads_20K_clean = (reads_20K[!zero_GCs])[!small_GCs]
+num_cln = length(GC_20K_clean)
+cat("We are left with", num_cln, "observations",
+    "which is", round(100*num_cln/num_ttl,2),"% of the original data.")
+
+```
+
+
+
+```{r}
+# Calculate mean and standard deviation of reads_20K
+mean_reads = mean(reads_20K)
+sd_reads = sd(reads_20K)
+
+# Compute z-scores for each y-value (reads_20K)
+z_scores = (reads_20K - mean_reads) / sd_reads
+
+# Create a logical vector for the subset of data points within 2 z-scores
+clean_subset = abs(z_scores) < 2
+
+# Fit the linear model using the cleaned data
+reg_1 = lm(reads_20K ~ GC_20K)
+reg_2 = lm(reads_20K_clean ~ GC_20K_clean)
+reg_3 = lm(reads_20K ~ GC_20K, subset = clean_subset)
+reg_4 = lm(reads_20K_clean ~ GC_20K_clean, subset = clean_subset)
+
+# Summary of the linear model
+summary(reg_1)
+summary(reg_2)
+summary(reg_3)
+summary(reg_4)
+```
+
+
+```{r}
+# Plot the residuals for the linear model with the cleaned data
+pred_lin = predict(reg_3)
+lin_res = reads_20K[clean_subset] - pred_lin
+
+# Create GC groups for plotting residuals
+GC_20K_clean = GC_20K[clean_subset]
+# Adjust breaks to ensure they are unique
+breaks = unique(quantile(GC_20K_clean, probs = seq(0, 1, by = 0.05)))
+if (length(breaks) < 21) {
+  breaks = seq(min(GC_20K_clean), max(GC_20K_clean), length.out = 21)
+}
+GC_groups = cut(GC_20K_clean, breaks = breaks, include.lowest = TRUE)
+
+# Plot the residuals against GC groups
+boxplot(lin_res ~ GC_groups, main = "Residuals vs. GC Groups", xlab = "GC Group", ylab = "Residuals", las = 2)
+
+# Add grid lines
+abline(h = seq(-200, 400, by = 100), col = "darkgray", lty = 2)  # Horizontal grid lines
+abline(v = 1:length(levels(GC_groups)), col = "darkgray", lty = 2)  # Vertical grid lines for groups
+
+# Plot the residuals scatter plot with grid lines
+plot(GC_20K_clean, lin_res, pch = 16, cex = 0.5, col = rgb(0, 0, 0, 0.5),
+     xlab = "Adjusted GC Content", ylab = "Residuals",
+     main = "Residuals vs Adjusted GC Content")
+abline(h = seq(-200, 400, by = 100), col = "darkgray", lty = 2)  # Horizontal grid lines
+abline(v = seq(0.3, 0.8, by = 0.05), col = "darkgray", lty = 2)  # Vertical grid lines
+
+```
+
+## Q1: Segmented regression
+
+
+```{r fit}
+
+# Fit initial linear model
+reg_1 = lm(reads_20K~GC_20K,subset = !small_GCs)
+# reg_1 = lm(reads_20K_clean ~ GC_20K_clean)
+
+
+# Using `segmented` package for piecewise regression
+seg_model = segmented(reg_1, seg.Z = ~GC_20K_clean, npsi = 2)
+
+# Extract breakpoints
+breakpoints = seg_model$psi[, "Est."]
+knot1 = breakpoints[[1]]
+knot2 = breakpoints[[2]]
+
+# Plot piecewise polynomial regression
+plot(GC_20K_clean, reads_20K_clean, pch = 16, cex = 0.5, col = rgb(0,0,0,0.5),
+     xlab = "GC Content (cleaned)", ylab = "Read Counts (cleaned)",
+     main = "Piecewise Polynomial Regression")
+
+# Add line of segmented model regression
+plot(seg_model, add = TRUE, col = "purple")
+
+# Plot knots for reference
+abline(v = c(knot1, knot2), lty = 2, col = "darkgray", lwd = 1.5)
+
+# Fit a piecewise linear model using I() notation
+pw_model_I = lm(reads_20K_clean ~ 
+                          I(GC_20K_clean * (GC_20K_clean <= knot1)) +
+                          I(GC_20K_clean * ((GC_20K_clean > knot1) & (GC_20K_clean <= knot2))) +
+                          I(GC_20K_clean * (GC_20K_clean > knot2))
+                        )
+
+# Create new data for prediction using I() notation
+new_data_I = data.frame(GC_20K_clean = seq(min(GC_20K_clean), max(GC_20K_clean), length.out = 1000))
+new_data_I$y_pred = predict(pw_model_I, newdata = new_data_I)
+
+# Add predicted piecewise regression line using I() notation
+lines(new_data_I$GC_20K_clean, new_data_I$y_pred, col = "orange", lwd = 2)
+
+# Legend
+legend("topleft", legend = c("Segmented Package", "Manual Piecewise"), 
+       col = c("purple", "orange"), lwd = 2, cex = 0.7)
+
+```
+
+
+```{r}
+# Remove outliers of read count that are too far away from the mean
+# Calculate mean and standard deviation of reads_20K_clean
+mean_reads = mean(reads_20K_clean)
+sd_reads = sd(reads_20K_clean)
+
+# Compute z-scores for each y-value (reads_20K_clean)
+z_scores = (reads_20K_clean - mean_reads) / sd_reads
+
+# Filter out the data points where the absolute value of the z-score is 2 or more
+filtered_indices = abs(z_scores) < 2
+
+GC_20K_clean_filtered = GC_20K_clean[filtered_indices]
+reads_20K_clean_filtered = reads_20K_clean[filtered_indices]
+
+# Check the number of data points before and after filtering
+cat("Number of data points before filtering:", length(reads_20K_clean), "\n")
+cat("Number of data points after filtering:", length(reads_20K_clean_filtered), "\n")
+
+# Plot the data before and after filtering
+par(mfrow = c(1, 2))  # Two plots in one row
+
+# Plot before filtering
+plot(GC_20K_clean, reads_20K_clean, pch = 16, cex = 0.5, col = rgb(0, 0, 0, 0.5),
+     xlab = "GC Content (cleaned)", ylab = "Reads", main = "Before Filtering")
+
+# Plot after filtering
+plot(GC_20K_clean_filtered, reads_20K_clean_filtered, pch = 16, cex = 0.5, col = rgb(0, 0, 0, 0.5),
+     xlab = "GC Content (cleaned)", ylab = "Reads", main = "After Filtering")
+
+# Reset plot layout
+par(mfrow = c(1, 1))
+
+
+```
+
+
+
+## Q2: Residuals vs Explanatory Variable
+Let's start by comparing the residuals of the piecewise polynomial model and the linear model. Ideally, residuals should be randomly distributed around zero without any discernible pattern.
+
+
+```{r}
+
+
+pred_seg = predict(seg_model)
+pred_pw = predict(pw_model_I)
+pred_lin = predict(reg_1)
+
+# Calculate residuals for seg model
+seg_res = reads_20K_clean - pred_seg
+pw_res = reads_20K_clean - pred_pw
+lin_res = reads_20K_clean - pred_lin
+
+par(mfrow = c(1, 2))  # Two plots in one row
+
+# Plot residuals for segmented model
+plot(GC_20K_clean, seg_res, pch = 16, cex = 0.5, col = rgb(0, 0, 0, 0.5),
+     ylim = c(min(pw_res),max(seg_res)),
+     xlab = "GC Content (cleaned)", ylab = "Residuals",
+     main = "Residuals of Segmented Model")
+abline(h = seq(-200, 400, by = 100), col = "darkgray", lty = 2)  # Horizontal grid lines
+abline(v = seq(0.3, 0.8, by = 0.05), col = "darkgray", lty = 2)  # Vertical grid lines
+abline(h = 0, col = "darkgray", lwd = 1.5)
+
+# Plot residuals for piecewise linear model
+plot(GC_20K_clean, pw_res, pch = 16, cex = 0.5, col = rgb(0, 0, 0, 0.5),
+     xlab = "GC Content (cleaned)", ylab = "Residuals",
+     main = "Residuals of Piecewise Polynomial Model")
+abline(h = 0, col = "darkgray", lwd = 1.5)
+
+# Reset plot layout
+par(mfrow = c(1, 1))
+
+```
+     
+## Bias Assessment
+The goal is to have residuals that are evenly distributed around zero (vertically) across all GC values. In the segmented model plotted on the left, the residuals are scattered randomly around zero, without any specific trend or pattern. Yet as seen in the residuals plot on the right-hand side, there is a noticeable pattern for GC values higher than 49.6%, indicating a bias. At circa 50-52% the model seems to systematically over-predict the read count, whereas above 52% the model tends to under-predict. 
+
+
+## Q3: Comparing to Simple Linear Regression
+Now, we calculate and compare Root Mean Squared Error, Mean Absolute Error and R-squared values for both models.
+
+```{r}
+
+# Helper function to compute regression metrics
+compute_metrics = function(actual, predicted) {
+  mae = mean(abs(actual - predicted))
+  mse = mean((actual - predicted) ^ 2)
+  rss = sum((predicted - actual) ^ 2)
+  tss = sum((actual - mean(actual)) ^ 2)
+  r_squared = 1 - (rss / tss)
+  
+  return(list(MAE = mae, MSE = mse, R_squared = r_squared))
+}
+
+# Compute metrics
+metrics_lin = compute_metrics(reads_20K_clean, pred_lin)
+metrics_pw = compute_metrics(reads_20K_clean, pred_pw)
+
+# Combine metrics for comparison
+metrics_comparison = data.frame(
+  Model = c("Linear", "Piecewise"),
+  MAE = c(metrics_lin$MAE, metrics_pw$MAE),
+  MSE = c(metrics_lin$MSE, metrics_pw$MSE),
+  R_squared = c(metrics_lin$R_squared, metrics_pw$R_squared)
+)
+
+
+print(metrics_comparison)
+
+```
+
+Based on the visual comparison of residuals and numerical comparison metrics:
+
+The model using the `segmented` package shows more evenly distributed residuals around zero, indicating a potentially better fit than the linear or the quadratic models. The MSE (here we consider it to be like the MSPE) and R-squared metrics further support this indication, because higher R-squared is higher explainability and lower MSE means smaller deviations from the actual values. The same conclusion can be derived from the lower Mean Absolute Error, which is less sensitive to outliers compared to MSE and RMSE. 
+
+
+
+```{r}
+# Define quantiles for GC content
+gc_quantiles = quantile(GC_20K_clean, probs = c(0, 0.25, 0.5, 0.75, 1))
+
+# Function to compute standard deviation of residuals within each quantile
+compute_residual_stats = function(gc, residuals, quantiles) {
+  stats = data.frame(
+    quantile = character(),
+    StdDev_Residuals = numeric()
+  )
+  for (i in 1:(length(quantiles) - 1)) {
+    mask = (gc >= quantiles[i]) & (gc < quantiles[i + 1])
+    stddev_residuals = sd(residuals[mask])
+    stats = rbind(stats, data.frame(
+      quantile = paste0("Q", i),
+      StdDev_Residuals = stddev_residuals
+    ))
+  }
+  return(stats)
+}
+
+# Compute statistics for both models
+stats_lin = compute_residual_stats(GC_20K_clean, pred_lin, gc_quantiles)
+stats_pred = compute_residual_stats(GC_20K_clean, pw_res, gc_quantiles)
+colnames(stats_lin)[1] = "Quantile"
+colnames(stats_lin)[2] = "Std Dev Res (Linear)"
+colnames(stats_pred)[2] = "Std Dev Res (Piece Wise)"
+stats_lin[2] = round(stats_lin[2],2)
+stats_pred[2] = round(stats_pred[2],2)
+stats_compare = cbind(stats_lin,stats_pred[2])
+print(stats_compare)
+
+```
+
+
+## Conclusion
+The segmented model provides a better fit to the data compared to the linear model, as evidenced by:
+
+1. Lower standard deviations in residuals across most quantiles. \n
+2. A more consistent spread of residuals across the range of GC content. \n
+These results suggest that the segmented model improves the prediction quality by more accurately capturing the underlying relationship between GC content and read counts, particularly in regions with higher GC content where the linear model struggles.
+

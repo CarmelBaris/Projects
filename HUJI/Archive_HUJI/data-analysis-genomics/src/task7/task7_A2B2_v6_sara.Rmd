@@ -1,0 +1,311 @@
+---
+title: "Lab Task 7"
+author: "Group 6"
+date: Sys.Date()
+output:
+  html_document:
+    code_folding: show
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+Group members:
+
+- Shawn Yakir , 315714980,  shawn.yakir@mail.huji.ac.il
+- Sarah Levitz, 324673623, sarah.levitz@mail.huji.ac.il
+- Carmel Baris, 318455276, carmel.baris@mail.huji.ac.il 
+
+### Clean the environment
+```{r clean}
+rm(list = ls())
+```
+
+### Libraries used
+
+```{r libraries}
+library('splines')
+library('scales')
+```
+
+
+### Paths
+```{r paths}
+#path = "~/Carmel/RProjects/Lab_Benjamini/data"
+path = "/Users/alevi/Downloads/"
+# path = "\\Users\\shawn\\Desktop\\"
+```
+
+
+### Helper functions
+```{r helpers}
+helpers_file = file.path(path, "help_funcs.R")
+source(helpers_file)
+helpers = list(loadRData = loadRData, binReads = binReads)
+```
+
+
+### Load data
+```{r dat}
+load(sprintf("%s/reads_100_A2.rda",path))
+load(sprintf("%s/reads_100_B2.rda",path))
+load(sprintf("%s/GC_100.rda",path))
+GC_100=GC_100[1: (length(reads_100_A2)) ]
+```
+
+### Binning
+```{r binning}
+binsize = 25
+
+# Trim the data vectors to the nearest multiple of binsize
+trim_length = length(reads_100_A2) - (length(reads_100_A2) %% binsize)
+reads_100_A2_trimmed = reads_100_A2[1:trim_length]
+reads_100_B2_trimmed = reads_100_B2[1:trim_length]
+GC_100_trimmed = GC_100[1:trim_length]
+
+# Create the matrices
+chr2t_mat = matrix(reads_100_A2_trimmed, nrow = binsize)
+reads2.5K_t2 = colSums(chr2t_mat)
+
+chr2n_mat = matrix(reads_100_B2_trimmed, nrow = binsize)
+reads2.5K_n2 = colSums(chr2n_mat)
+
+gc_mat = matrix(GC_100_trimmed, nrow = binsize)
+GC2.5K = colMeans(gc_mat)
+```
+
+
+### Outliers
+```{r outliers}
+# Outliers of GC percent per bin
+zeros_GC = GC2.5K == 0
+# Identify outliers of reads count per bin
+z_scores_n2 = (reads2.5K_n2 - mean(reads2.5K_n2)) / sd(reads2.5K_n2)
+z_scores_t2 = (reads2.5K_t2 - mean(reads2.5K_t2)) / sd(reads2.5K_t2)
+xtreme_reads_n2 = abs(z_scores_n2) > 3
+xtreme_reads_t2 = abs(z_scores_t2) > 3
+
+# Create new variables without outliers
+outliers = (zeros_GC | xtreme_reads_t2 | xtreme_reads_n2)
+outliers = (outliers | (reads2.5K_t2<0.05) | (reads2.5K_n2<0.05))
+reads2.5K_n2_clean = reads2.5K_n2[!outliers]
+reads2.5K_t2_clean = reads2.5K_t2[!outliers]
+GC2.5K_clean = GC2.5K[!outliers]
+
+```
+
+### Fitting bspline regression
+```{r fit}
+create_est_f = function(X, Y, deg, knots) {
+  lknot = min(X)
+  rknot = max(X)
+  lm(Y ~ bs(X, degree = deg, knots = knots, Boundary.knots = c(lknot, rknot)))
+}
+```
+
+
+
+```{r normalizing}
+# Use the rescale function from the scales package
+reads2.5K_n2_normalized = scales::rescale(reads2.5K_n2_clean, to = c(0, 100))
+reads2.5K_t2_normalized = scales::rescale(reads2.5K_t2_clean, to = c(0, 100))
+```
+
+```{r}
+# Ensure sample size is not larger than the length of the cleaned data
+sample_size = min(length(reads2.5K_n2_clean), 10000)
+samp1 = sample(length(reads2.5K_n2_clean), sample_size)
+
+# Plot the normalized data
+par(mfcol = c(2, 1), mar = c(1, 5, 1, 1))
+plot(GC2.5K_clean[samp1], reads2.5K_n2_normalized[samp1], cex = 0.4, pch = 20, ylab = "Healthy 2", ylim = c(1.5, 35), xlim = c(0.2, 0.75))
+plot(GC2.5K_clean[samp1], reads2.5K_t2_normalized[samp1], cex = 0.4, pch = 20, ylab = "Tumor 2", ylim = c(0, 35), xlim = c(0.2, 0.75))
+
+```
+
+
+## Learn parameters from chromosome 1
+
+```{r}
+l_2n = length(reads2.5K_n2_normalized)
+l_2t = length(reads2.5K_t2_normalized)
+
+myknots = c(0.415, 0.45, 0.54)
+
+GC=GC2.5K_clean[1:l_2n]
+
+mod_2n = lm(reads2.5K_n2_normalized~bs(GC, degree = 3),subset = reads2.5K_n2_normalized>1.5 & reads2.5K_n2_normalized<35 )
+
+pred_range = seq(0.2,0.75,0.01)
+resp_n = predict(mod_2n,list(GC=pred_range))
+preds2n = predict(mod_2n,list(GC=GC2.5K_clean))
+
+par(mfcol = c(1,1),mar = c(3,5,3,3))
+plot(GC2.5K_clean[samp1],reads2.5K_n2_normalized[samp1],ylim = c(0,35),xlim = c(0.2,.75), cex = 0.5, pch=20, main = "Healthy 2")
+lines(pred_range, resp_n,col = 4,lw=3)
+lines(pred_range, resp_n,col = 4,lw=3)
+
+```
+
+
+```{r}
+GC=GC2.5K_clean[1:l_2t]
+mod_2t = lm(reads2.5K_t2_normalized~bs(GC, degree = 3),subset = (reads2.5K_t2_normalized>1.5)&(reads2.5K_t2_normalized<40))
+
+pred_range = seq(0.2,0.75,0.01)
+resp_t = predict(mod_2t,list(GC=pred_range))
+preds2t = predict(mod_2t,list(GC=GC2.5K_clean))
+
+par(mfcol = c(1,1),mar = c(3,3,3,3))
+plot(GC2.5K_clean[samp1],reads2.5K_t2_normalized[samp1],ylim = c(0,35),xlim = c(0.2,.75), cex = 0.5, pch=20, main = "Tumor 2")
+lines(pred_range, resp_t,col = 2,lw=3)
+lines(pred_range, resp_n,col = 4,lw=3)
+```
+
+
+## One sample corrections
+```{r func_fix}
+one_sample_correct = function(samp, preds) {
+  one_correct = (samp)/(preds)
+  return(one_correct)
+}
+```
+
+```{r med_fix}
+corrected_2n = one_sample_correct (reads2.5K_n2_normalized,preds2n[1:l_2n])
+uncorrected_2n = (reads2.5K_n2_normalized)/median(reads2.5K_n2_normalized) 
+
+corrected_2t = one_sample_correct (reads2.5K_t2_normalized,preds2t[1:l_2t])
+uncorrected_2t = (reads2.5K_t2_normalized)/median(reads2.5K_t2_normalized) 
+
+```
+
+### Introduction 
+
+This week we...
+
+### Part 1 Q1: 
+
+We'll start with a breakdown of the variance in the healthy sample after filtering out the outliers and after correcting the median.
+
+```{r}
+# Fit B-spline Model
+l_2n = length(reads2.5K_n2_clean)
+GC = GC2.5K_clean[1:l_2n]
+mod_2n = lm(reads2.5K_n2_clean ~ bs(GC, degree = 3))
+preds2n = predict(mod_2n, list(GC = GC))
+residuals_2n = reads2.5K_n2_clean - preds2n
+```
+
+```{r}
+### Median Correction
+uncorrected_2n = reads2.5K_n2_clean / median(reads2.5K_n2_clean)
+
+### Variance Decomposition
+total_variance = var(reads2.5K_n2_clean)
+poisson_variance = mean(reads2.5K_n2_clean)
+gc_variance = var(preds2n)
+unexplained_variance = var(residuals_2n)
+
+### Percentage of Variance
+percentage_poisson = (poisson_variance / total_variance) * 100
+percentage_gc = (gc_variance / total_variance) * 100
+percentage_unexplained = (unexplained_variance / total_variance) * 100
+```
+
+```{r}
+### Results
+cat("Percentage of variance due to Poisson distribution: ", percentage_poisson, "%\n")
+cat("Percentage of variance due to GC effect: ", percentage_gc, "%\n")
+cat("Percentage of variance unexplained: ", percentage_unexplained, "%\n")
+```
+
+
+```{r}
+### One sample corrections
+one_sample_correct = function(samp, preds) {
+  one_correct = (samp) / (preds)
+  return(one_correct)
+}
+
+# Apply correction function to normalized data
+corrected_2n = one_sample_correct(reads2.5K_n2_normalized, preds2n[1:l_2n])
+uncorrected_2n = (reads2.5K_n2_normalized) / median(reads2.5K_n2_normalized)
+
+corrected_2t = one_sample_correct(reads2.5K_t2_normalized, preds2t[1:l_2n])
+uncorrected_2t = (reads2.5K_t2_normalized) / median(reads2.5K_t2_normalized)
+
+### Calculate Variance for Corrected Data
+corrected_total_variance = var(corrected_2n)
+corrected_poisson_variance = mean(corrected_2n)
+corrected_gc_variance = var(preds2n)
+corrected_unexplained_variance = var(corrected_2n - preds2n)
+
+# Calculate percentages correctly
+corrected_percentage_poisson = (corrected_poisson_variance / corrected_total_variance) * 100
+corrected_percentage_gc = (corrected_gc_variance / corrected_total_variance) * 100
+corrected_percentage_unexplained = (corrected_unexplained_variance / corrected_total_variance) * 100
+
+#!!!!!!!!!!!!!!!!!!!!!1 issue with corrected data
+### Results for Corrected Data
+cat("Percentage of variance due to Poisson distribution (corrected): ", corrected_percentage_poisson, "%\n")
+cat("Percentage of variance due to GC effect (corrected): ", corrected_percentage_gc, "%\n")
+cat("Percentage of variance unexplained (corrected): ", corrected_percentage_unexplained, "%\n")
+
+```
+
+
+
+Poisson Distribution: 6.44% of the total variance is due to the inherent randomness in read counts.
+GC Content: 64.64% of the variance is explained by GC content, indicating a strong influence on read counts.
+Unexplained Variance: 35.36% of the variance is not explained by the Poisson distribution or GC content, suggesting other factors are at play.
+
+
+### Part 2 Q1: 
+
+```{r}
+# Fit B-spline Regression Models
+GC_healthy = GC2.5K_clean
+mod_healthy = lm(reads2.5K_n2_clean ~ bs(GC_healthy, degree = 3))
+pred_healthy = predict(mod_healthy, list(GC_healthy = GC_healthy))
+
+# Tumor Sample
+reads2.5K_t2_clean = reads2.5K_t2_clean[1:l_2n]  # Ensure tumor data matches in length
+mod_tumor = lm(reads2.5K_t2_clean ~ bs(GC_healthy, degree = 3))
+pred_tumor = predict(mod_tumor, list(GC_healthy = GC_healthy))
+
+```
+
+```{r}
+# Define the range for predictions
+pred_range = seq(0.2, 0.75, 0.01)
+
+# Predict values over the range for both models
+preds_healthy = predict(mod_healthy, newdata = data.frame(GC_healthy = pred_range))
+preds_tumor = predict(mod_tumor, newdata = data.frame(GC_healthy = pred_range))
+
+```
+
+```{r}
+# Combined Plot
+par(mfcol = c(1, 1), mar = c(5, 5, 4, 2))
+
+# Plot the data points first
+plot(GC_healthy, reads2.5K_n2_clean, col = 'blue', pch = 20, cex = 0.5, ylab = "Normalized Reads", xlab = "GC Content", main = "Healthy vs Tumor Sample")
+points(GC_healthy, reads2.5K_t2_clean, col = 'red', pch = 20, cex = 0.5)
+
+# Add the regression lines on top
+lines(pred_range, preds_healthy, col = 'darkblue', lwd = 2)
+lines(pred_range, preds_tumor, col = 'darkred', lwd = 2)
+
+# Add legend
+legend("topright", legend = c("Healthy Sample", "Tumor Sample"), col = c("blue", "red"), lty = 1, lwd = 2, pch = 20)
+
+```
+
+Shape of the Regression Lines: Both samples exhibit a similar unimodal relationship with GC content, indicating that the GC effect on read counts is similar in shape for both healthy and tumor samples.
+Magnitude of Read Counts: The tumor sample generally has higher read counts compared to the healthy sample across the GC content range. This indicates that while the pattern is similar, the extent to which GC content affects read counts differs between the two samples.
+
+The connection is the same in terms of the pattern of the relationship, but the magnitude of the effect differs between the healthy and tumor samples.
+
+

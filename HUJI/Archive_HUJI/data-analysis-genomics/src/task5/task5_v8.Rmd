@@ -1,0 +1,491 @@
+---
+title: "Lab Task 4: Approx. Regression w/ Piecewise Polynomial Model"
+author: "Group 6"
+date: Sys.Date()
+output:
+  html_document:
+    code_folding: show
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+Group members:
+
+- Shawn Yakir , 315714980, shawnyakir@gmail.com
+- Sarah Levitz, 324673623, sarah.levitz@mail.huji.ac.il
+- Carmel Baris, 318455276, carmel.baris@mail.huji.ac.il 
+
+
+## Setup
+
+```{r setup}
+
+# Clean the environment
+rm(list = ls())
+
+# Load required packages
+library('data.table')
+library('splines')
+
+# Set working directory
+# dir_name = "/Users/alevi/Downloads/"
+dir_name = "~/Carmel/RProjects/Lab_Benjamini/data/"
+
+# Load helper functions
+helpers_file = file.path(dir_name, "help_funcs.R")
+source(helpers_file)
+helpers = list(
+    loadRData = loadRData,
+    fitMet = fitMetrics,
+    binBases = binBases,
+    binReads = binReads,
+    chk_ratio = check_proportions,
+    chk_ovrlp = check_overlaps,
+    chk_size = check_data_size,
+    fit_bspline = fit_bspline,
+    plot_bspline = plot_bspline_results
+    )
+
+# Load data
+bases_file = file.path(dir_name, "chr1_line.rda")
+chr1_bases = helpers$loadRData(bases_file)
+reads_file_all = file.path(dir_name, "TCGA-13-0723-01A_lib2_all_chr1.forward")
+chr1_reads = data.table::fread(reads_file_all)
+colnames(chr1_reads) = c("Chrom", "Loc", "FragLen")
+
+# Preprocess data
+nreads = nrow(chr1_reads)
+myLocations = as.numeric(chr1_reads$Loc)
+last_read = myLocations[nreads]
+binsize = 20000
+bases_20K = helpers$binBases(chr1_bases, last_read, binsize)
+GC_20K = bases_20K[, 3] + bases_20K[, 4]
+if(any(GC_20K>1)){GC_20K = GC_20K / binsize}
+
+reads_20K = helpers$binReads(myLocations, binsize, last_read)
+save(reads_20K, GC_20K, file = file.path(dir_name, "reads_gc_20K.rda"))
+```
+
+
+
+
+## Removing outliers
+
+```{r outliers}
+
+# Defining logical vectors for filtering out bins (observations)
+small_GC = GC_20K <= 0.3 & GC_20K > 0 #low-GC content bins (<30%)
+whiskers = boxplot.stats(reads_20K)$stats[c(1, 5)]
+confounders = reads_20K < whiskers[1] | reads_20K > whiskers[2]
+
+# create new variables without outliers
+outliers = (small_GC | confounders)
+reads_20K_clean = reads_20K[!outliers]
+GC_20K_clean = GC_20K[!outliers]
+
+```
+
+
+
+## Sanity checks for removing outliers process
+
+```{r qa_outliers, message=FALSE, warning=FALSE}
+
+# Calculate sums and percentages
+values = c(sum(small_GC),sum(confounders),sum(outliers),length(outliers))
+portion = (values / length(outliers)) * 100
+portion_pretty = sprintf("%.2f%%", portion)
+
+# Create a data frame
+table_data = data.frame(
+  Outliers_Condition = c("0%<GC<30%", "Confounders","Total Outliers", "Total Observations"),
+  Num_Observed = values,
+  Percentage = sprintf("%.2f%%", portion)
+)
+
+sorted_table_data = table_data[order(table_data$Num_Observed), ]
+
+print(sorted_table_data)
+
+```
+
+
+
+
+## Visualize outliers
+
+```{r viz_outliers}
+
+par(mfrow = c(1,2))
+
+# Create the scatter plot
+plot(GC_20K, reads_20K, pch = 20, cex = 0.7, col = rgb(0, 0, 0, 0.5),
+     xlab = "GC Content (cleaned)", ylab = "Read Counts (cleaned)",
+     ylim = c(min(reads_20K), max(reads_20K_clean)),
+     main = "Majority of Outliers")
+
+# Add mean line
+abline(h = mean(reads_20K), col = "darkgray", lwd = 2)
+
+# Add horizontal lines for quartiles and whiskers
+quantiles = quantile(reads_20K, c(0.25, 0.75))
+abline(h = c(quantiles, whiskers), col = "darkgray", lty = 2)
+
+
+# Mark outliers
+points(GC_20K[confounders], reads_20K[confounders], col = "red", pch = 20)
+points(GC_20K[small_GC], reads_20K[small_GC], col = "orange", pch = 20)
+
+
+# Create the scatter plot
+plot(GC_20K, reads_20K, pch = 20, cex = 0.7, col = rgb(0, 0, 0, 0.5),
+     xlab = "GC Content (cleaned)", ylab = "Read Counts (cleaned)",
+     ylim = c(2000, 7000),
+     main = "Outliers Above Upper Quantile")
+
+# Add mean line
+abline(h = mean(reads_20K), col = "darkgray", lwd = 2)
+
+# Add horizontal lines for quartiles and whiskers
+quantiles = quantile(reads_20K, c(0.25, 0.75))
+whiskers = boxplot.stats(reads_20K)$stats[c(1, 5)]
+abline(h = c(quantiles, whiskers), col = "darkgray", lty = 2)
+
+
+# Mark outliers
+points(GC_20K[confounders], reads_20K[confounders], col = "red", pch = 20)
+points(GC_20K[small_GC], reads_20K[small_GC], col = "orange", pch = 20)
+
+par(mfrow = c(1,1))
+
+# define GC limits for plots
+min_cleanGC = min(GC_20K_clean)
+max_cleanGC = max(GC_20K_clean)
+
+```
+
+## Benchmark: fit bspline regression (pre-split)
+
+
+```{r fit}
+
+plot(GC_20K, reads_20K, pch = 16, cex = 0.5, col = rgb(0, 0, 0, 0.7),
+     xlab = "GC Content (cleaned)", ylab = "Read Counts (cleaned)",
+     xlim = c(min_cleanGC,max_cleanGC),
+     ylim = c(min(reads_20K_clean),max(reads_20K_clean)),
+     main = "B-spline Regression")
+
+
+# Fit the regression models
+knots_bs = c(0.415, 0.45, 0.54)
+lknot = min(GC_20K)
+rknot = max(GC_20K)
+reg_bs = lm(subset = !outliers,
+             formula = reads_20K ~ bs(GC_20K, degree = 3, 
+                                      knots = knots_bs, 
+                                      Boundary.knots = c(lknot, rknot)))
+
+# Create new data for prediction
+new_data = data.frame(GC_20K = seq(min_cleanGC, max_cleanGC, length.out = 1000))
+new_data$predicted = predict(reg_bs, newdata = new_data)
+
+# Plot the B-spline regression line
+lines(new_data$GC_20K, new_data$predicted, col = "blue", lwd = 2)
+
+# Add vertical lines to indicate breakpoints
+abline(v = knots_bs, lty = 2, col = "darkgray", lwd = 1.5)
+
+```
+
+
+
+```{r residuals}
+pred_bs = predict(reg_bs)
+res_bs = reads_20K_clean - pred_bs
+
+plot(GC_20K_clean, res_bs, pch = 16, cex = 0.5, col = rgb(0, 0, 0, 0.5),
+     xlab = "GC Content (cleaned)", ylab = "Residuals",
+     main = "Residuals of BSpline Model")
+abline(h = 0, col = "darkgray", lwd = 1.5)
+
+```
+
+
+
+
+
+
+## QUESTION 1B: 
+
+## Splitting to test and train (three versions)
+
+```{r train_fit}
+# Set seed for reproducibility
+set.seed(100)
+
+# ----------------------------------------------------------
+# Partition 1: divide data into 20 parts and randomly assign 14 parts to train
+n_bins = length(reads_20K)
+bins_per_group = n_bins %/% 20  # Integer Partition to get bins per group
+extra_bins = n_bins %% 20       # Remainder to ensure equal-sized groups
+
+# Distribute extra bins (if any) across the groups
+group_sizes = rep(bins_per_group, 20)
+if (extra_bins > 0) {
+  group_sizes[1:extra_bins] = group_sizes[1:extra_bins] + 1
+}
+
+# Create the 20 groups
+groups = split(1:n_bins, rep(1:20, group_sizes))
+
+# Randomly select 14 groups for training and 6 for testing
+div1_train_ind = sample(1:20, 14)
+div1_test_ind = setdiff(1:20, div1_train_ind)
+
+# Create logical vectors for Partition 1
+div1_train_vec = rep(FALSE, n_bins)
+div1_test_vec = rep(FALSE, n_bins)
+
+div1_train_vec[unlist(groups[div1_train_ind])] = TRUE
+div1_test_vec[unlist(groups[div1_test_ind])] = TRUE
+
+# ----------------------------------------------------------
+# Partition 2: Completely random Partition (70% train, 30% test)
+n_samples = length(reads_20K)
+div2_train_ind = sample(1:n_samples, 0.7 * n_samples)
+div2_test_ind = setdiff(1:n_samples, div2_train_ind)
+
+# Create logical vectors for Partition 2
+div2_train_vec = rep(FALSE, n_samples)
+div2_test_vec = rep(FALSE, n_samples)
+
+div2_train_vec[div2_train_ind] = TRUE
+div2_test_vec[div2_test_ind] = TRUE
+
+# ----------------------------------------------------------
+# Partition 3: Sorted by chrome locations (first 70% train, last 30% test)
+div3_train_ind = 1:floor(0.7 * n_samples)
+div3_test_ind = (floor(0.7 * n_samples) + 1):n_samples
+
+# Create logical vectors for Partition 3
+div3_train_vec = rep(FALSE, n_samples)
+div3_test_vec = rep(FALSE, n_samples)
+
+div3_train_vec[div3_train_ind] = TRUE
+div3_test_vec[div3_test_ind] = TRUE
+
+
+train_data_div1 = data.frame(GC_20K = GC_20K_clean[div1_train_vec], 
+                             reads_20K = reads_20K_clean[div1_train_vec])
+train_data_div2 = data.frame(GC_20K = GC_20K_clean[div2_train_vec], 
+                             reads_20K = reads_20K_clean[div2_train_vec])
+train_data_div3 = data.frame(GC_20K = GC_20K_clean[div3_train_vec], 
+                             reads_20K = reads_20K_clean[div3_train_vec])
+
+# Define knots for the B-spline
+knots_bs = c(0.415, 0.45, 0.54)
+
+# Fit the B-spline model using the train data for each Partition
+reg_bs_train_div1 = lm(data = train_data_div1, formula = reads_20K 
+                       ~ bs(GC_20K, degree = 3, knots = knots_bs, 
+                            Boundary.knots = c(min_cleanGC, max_cleanGC)))
+reg_bs_train_div2 = lm(data = train_data_div2, formula = reads_20K 
+                       ~ bs(GC_20K, knots = knots_bs, degree = 3, 
+                            Boundary.knots = c(min_cleanGC, max_cleanGC)))
+reg_bs_train_div3 = lm(reads_20K ~ bs(GC_20K, knots = knots_bs, degree = 3, Boundary.knots = c(min_cleanGC, max_cleanGC)), data = train_data_div3)
+
+# Create new data for prediction
+new_data = data.frame(GC_20K = seq(min_cleanGC, max_cleanGC, length.out = 1000))
+
+# Predict for each Partition
+predicted_div1 = predict(reg_bs_train_div1, newdata = new_data)
+predicted_div2 = predict(reg_bs_train_div2, newdata = new_data)
+predicted_div3 = predict(reg_bs_train_div3, newdata = new_data)
+
+```
+
+
+```{r train_plots}
+# Plot the data and the B-spline regression lines for each Partition
+plot(GC_20K_clean, reads_20K_clean, pch = 16, cex = 0.5, col = rgb(0, 0, 0, 0.7),
+     xlab = "GC Content (cleaned)", ylab = "Read Counts (cleaned)",
+     xlim = c(min_cleanGC, max_cleanGC),
+     ylim = c(0, 3500),
+     main = "B-Spline Regression on Train Data")
+
+# Plot the B-spline regression lines for each Partition
+lines(new_data$GC_20K, predicted_div1, col = "blue", lwd = 2)
+lines(new_data$GC_20K, predicted_div2, col = "red", lwd = 2)
+lines(new_data$GC_20K, predicted_div3, col = "green", lwd = 2)
+
+# Add vertical lines to indicate breakpoints
+abline(v = knots_bs, lty = 2, col = "darkgray", lwd = 1.5)
+
+# Add legend
+legend("topleft", col = c("blue", "red", "green"), lwd = 2, cex = 0.75, bty = "n",
+       legend = c("70% Random Regions (Div 1)", "70% Random Bins (Div 2)", "70% Bins on Far-Left (Div 3)"))
+
+```
+
+```{r train_plots2}
+
+# Plot the data and the B-spline regression lines for each Partition
+plot(GC_20K_clean, reads_20K_clean, pch = 16, cex = 0.5, col = rgb(0, 0, 0, 0.7),
+     xlab = "GC Content (cleaned)", ylab = "Read Counts (cleaned)",
+     xlim = c(0.5, max_cleanGC),
+     ylim = c(0, 3500),
+     main = "B-Spline Regression on Train Data")
+
+# Plot the B-spline regression lines for each Partition
+lines(new_data$GC_20K, predicted_div1, col = "blue", lwd = 2)
+lines(new_data$GC_20K, predicted_div2, col = "red", lwd = 2)
+lines(new_data$GC_20K, predicted_div3, col = "green", lwd = 2)
+
+# Add vertical lines to indicate breakpoints
+abline(v = knots_bs, lty = 2, col = "darkgray", lwd = 1.5)
+
+# Add legend
+legend("topleft", legend = c("70% Random Regions (Div 1)", "70% Random Bins (Div 2)", "70% First Bins on Left (Div 3)"), col = c("blue", "red", "green"), lwd = 2, cex = 0.75, bty = "n")
+
+
+```
+
+QUESTION 1C+1D
+```{r split_metrics}
+# Subset test data for each Partition
+test_data_div1 = data.frame(GC_20K = GC_20K_clean[div1_test_vec], reads_20K = reads_20K_clean[div1_test_vec])
+test_data_div2 = data.frame(GC_20K = GC_20K_clean[div2_test_vec], reads_20K = reads_20K_clean[div2_test_vec])
+test_data_div3 = data.frame(GC_20K = GC_20K_clean[div3_test_vec], reads_20K = reads_20K_clean[div3_test_vec])
+
+# Predict for test data in each Partition
+test_data_div1$predicted = predict(reg_bs_train_div1, newdata = test_data_div1)
+test_data_div2$predicted = predict(reg_bs_train_div2, newdata = test_data_div2)
+test_data_div3$predicted = predict(reg_bs_train_div3, newdata = test_data_div3)
+
+# Define a function to calculate R-squared, MAE, and MSE
+calculate_metrics = function(actual, predicted) {
+  r_squared = 1 - sum((actual - predicted)^2) / sum((actual - mean(actual))^2)
+  mae = mean(abs(actual - predicted))
+  mse = mean((actual - predicted)^2)
+  return(list(R_squared = r_squared, MAE = mae, MSE = mse))
+}
+
+# Calculate metrics for train and test data in each Partition
+metrics_train_div1 = calculate_metrics(train_data_div1$reads_20K, predict(reg_bs_train_div1, newdata = train_data_div1))
+metrics_test_div1 = calculate_metrics(test_data_div1$reads_20K, test_data_div1$predicted)
+metrics_train_div2 = calculate_metrics(train_data_div2$reads_20K, predict(reg_bs_train_div2, newdata = train_data_div2))
+metrics_test_div2 = calculate_metrics(test_data_div2$reads_20K, test_data_div2$predicted)
+metrics_train_div3 = calculate_metrics(train_data_div3$reads_20K, predict(reg_bs_train_div3, newdata = train_data_div3))
+metrics_test_div3 = calculate_metrics(test_data_div3$reads_20K, test_data_div3$predicted)
+
+# Print metrics
+print(metrics_train_div1)
+print(metrics_test_div1)
+print(metrics_train_div2)
+print(metrics_test_div2)
+print(metrics_train_div3)
+print(metrics_test_div3)
+
+# Combine train and test metrics for each Partition
+metrics_div1 = rbind(metrics_train_div1, metrics_test_div1, names = c("Train", "Test"))
+metrics_div2 = rbind(metrics_train_div2, metrics_test_div2, names = c("Train", "Test"))
+metrics_div3 = rbind(metrics_train_div3, metrics_test_div3, names = c("Train", "Test"))
+
+# Combine Partition metrics into a single data frame
+all_metrics = rbind(metrics_div1, metrics_div2, metrics_div3)
+
+# Set column names
+colnames(all_metrics) = c("Partition", "R_squared", "MAE", "MSE")
+
+# Print the table with row names and some formatting
+print(round(all_metrics, digits = 3), row.names = c("Div 1", "Div 2", "Div 3"))
+
+
+```
+
+```{r split_plots}
+# Create plots for each Partition separately
+
+# Partition 1
+par(mfrow = c(1, 1))  # Reset to single plot
+plot(train_data_div1$GC_20K, train_data_div1$reads_20K, pch = 16, cex = 0.5, col = rgb(0, 0, 1, 0.5),
+     xlab = "GC Content (cleaned)", ylab = "Read Counts (cleaned)",
+     xlim = c(min_cleanGC, max_cleanGC),
+     ylim = c(0, max(reads_20K_clean)),
+     main = "Partition 1: Piecewise Polynomial Regression")
+
+lines(new_data$GC_20K, predicted_div1, col = "blue", lwd = 2)
+points(test_data_div1$GC_20K, test_data_div1$reads_20K, pch = 16, cex = 0.5, col = rgb(1, 0, 0, 0.5))
+points(test_data_div1$GC_20K, test_data_div1$predicted, pch = 16, cex = 0.5, col = rgb(0, 1, 0, 0.5))
+
+legend("topleft", legend = c("Train Data", "Test Data Actual", "Test Data Predicted", "B-spline Fit"),
+       col = c(rgb(0, 0, 1, 0.5), rgb(1, 0, 0, 0.5), rgb(0, 1, 0, 0.5), "blue"), lwd = 2, pch = 16, cex = 0.7)
+
+# Partition 2
+plot(train_data_div2$GC_20K, train_data_div2$reads_20K, pch = 16, cex = 0.5, col = rgb(0, 0, 1, 0.5),
+     xlab = "GC Content (cleaned)", ylab = "Read Counts (cleaned)",
+     xlim = c(min_cleanGC, max_cleanGC),
+     ylim = c(0, max(reads_20K_clean)),
+     main = "Partition 2: Piecewise Polynomial Regression")
+
+lines(new_data$GC_20K, predicted_div2, col = "red", lwd = 2)
+points(test_data_div2$GC_20K, test_data_div2$reads_20K, pch = 16, cex = 0.5, col = rgb(1, 0, 0, 0.5))
+points(test_data_div2$GC_20K, test_data_div2$predicted, pch = 16, cex = 0.5, col = rgb(0, 1, 0, 0.5))
+
+legend("topleft", legend = c("Train Data", "Test Data Actual", "Test Data Predicted", "B-spline Fit"),
+       col = c(rgb(0, 0, 1, 0.5), rgb(1, 0, 0, 0.5), rgb(0, 1, 0, 0.5), "red"), lwd = 2, pch = 16, cex = 0.7)
+
+# Partition 3
+plot(train_data_div3$GC_20K, train_data_div3$reads_20K, pch = 16, cex = 0.5, col = rgb(0, 0, 1, 0.5),
+     xlab = "GC Content (cleaned)", ylab = "Read Counts (cleaned)",
+     xlim = c(min_cleanGC, max_cleanGC),
+     ylim = c(0, max(reads_20K_clean)),
+     main = "Partition 3: Piecewise Polynomial Regression")
+
+lines(new_data$GC_20K, predicted_div3, col = "green", lwd = 2)
+points(test_data_div3$GC_20K, test_data_div3$reads_20K, pch = 16, cex = 0.5, col = rgb(1, 0, 0, 0.5))
+points(test_data_div3$GC_20K, test_data_div3$predicted, pch = 16, cex = 0.5, col = rgb(0, 1, 0, 0.5))
+
+legend("topleft", legend = c("Train Data", "Test Data Actual", "Test Data Predicted", "B-spline Fit"),
+       col = c(rgb(0, 0, 1, 0.5), rgb(1, 0, 0, 0.5), rgb(0, 1, 0, 0.5), "green"), lwd = 2, pch = 16, cex = 0.7)
+
+
+```
+
+
+
+QUESTION 2: 
+
+```{r}
+train_data_div3$residuals = train_data_div3$reads_20K - train_data_div3$predicted 
+test_data_div3$residuals = test_data_div3$reads_20K - test_data_div3$predicted 
+
+# Calculate the estimated regression coefficients 
+coefficients = coef(reg_bs_train_div3) 
+
+# Print the residuals and coefficients print("Train Data Residuals:") print(train_data_div3$residuals) 
+print("Test Data Residuals:") 
+print(test_data_div3$residuals) 
+print("Estimated Regression Coefficients:") 
+print(coefficients) 
+
+# Plot the residuals for train and test data 
+
+
+
+plot(test_data_div3$GC_20K, test_data_div3$residuals, pch = 16, cex = 0.5, col = rgb(1, 0, 0, 0.5), xlab = "GC Content (cleaned)", ylab = "Residuals", main = "Test Data Residuals") abline(h = 0, col = "darkgray", lwd = 1.5)
+
+
+
+plot(train_data_div3$GC_20K, train_data_div3$residuals, 
+     pch = 16, cex = 0.5, col = rgb(0, 0, 1, 0.5),
+     xlab = "GC Content (cleaned)", ylab = "Residuals",
+     main = "Residuals vs GC Content (Train Data)")
+abline(h = 0, col = "darkgray", lwd = 1.5)
+
+# Add smoother line (optional)
+smooth = smooth.spline(train_data_div3$GC_20K, train_data_div3$residuals)
+lines(smooth, col = "blue", lwd = 2)
+```
+

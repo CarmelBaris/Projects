@@ -1,0 +1,620 @@
+---
+title: "Lecture4"
+author: "Yuval Benjamini"
+date: "4 June 2024"
+output: html_document
+---
+
+# Preparing files 
+```{r libs}
+library("latex2exp")
+```
+
+# Discussion of saving and retrieving files 
+
+Let's prepare the GC file: 
+
+```{r warning=FALSE}
+
+## ------------------------------------------------
+## ---- DEPENDENCIES AKA FILES REQUIRED
+## Make sure that all files are in the current working directory:
+## 1. chr1_line.rda
+## 2. TCGA-13-0723-01A_lib2_all_chr1.forward
+## 3. helpers_file
+## 
+## Note that in this lecture we'll create and save a new file:
+## 4. reads_gc_5K.rda
+
+
+## ------------------------------------------------
+## ---- CLEAN ENVIRONMENT & SET WORKING DIRECTORY
+rm(list = ls())
+dir_name = "~/Carmel/RProjects/Lab_Benjamini/data/"
+# dir_name = "/Users/alevi/Downloads/"
+# setwd(dir_name)
+# getwd() # validate
+
+
+## ------------------------------------------------
+## ---- LOAD HELPER FUNCTIONS
+helpers_file = file.path(dir_name, "help_funcs.R")
+source(helpers_file)
+
+
+## ------------------------------------------------
+## ---- LOAD FILE OF NUCLEO_BASES (A,T,C,G)
+bases_file = file.path(dir_name, "chr1_line.rda")
+chr1_line = loadRData(bases_file) # like Lecture1
+
+
+## ------------------------------------------------
+## ---- LOAD FILE OF READS LOCATIONS (THAT START A FRAGMENT)
+
+# #YUVAL'S FILE
+reads_file_all = file.path(dir_name, "TCGA-13-0723-10B_lib2_all_chr1.forward")
+  
+#OUR FILE
+# reads_file_all = file.path(dir_name, "TCGA-13-0723-01A_lib2_all_chr1.forward")
+
+chr1_reads = data.table::fread(reads_file_all) #like Lecture2
+colnames(chr1_reads) = c("Chrom","Loc","FragLen")   
+
+
+```
+
+
+Count GC content per bin of size 5K....
+
+```{r, setup, include=FALSE}
+
+## chunk should not have eval = FALSE!!
+## o/w it messes up GC_5K
+
+nreads = nrow(chr1_reads)
+myLocations = as.numeric(chr1_reads$Loc)
+last_read = myLocations[nreads]
+
+# per bin, count occurrences of each letter
+bases_5K = binBases(chr1_line, last_read, 5000) 
+
+# per bin, sum occurrence counts of C & G only 
+GC_5K <<- bases_5K[, 3] + bases_5K[, 4] 
+
+```
+
+
+# Discussion of saving and retrieving files 
+
+From now on, we will usually work with two vectors: 
+
+- The GC_xK vector, e.g. GC_5K
+- The reads_xK vector, e.g. reads_5K
+
+Stored as numerics, they are both smaller than 1 mbyte.
+```{r, eval = FALSE}
+myLocations = as.integer(chr1_reads$Loc) # repeated for clarity
+last_read = myLocations[nreads]
+reads_5K = binReads(myLocations,5000,last_read)
+```
+
+
+
+Let's look at their size:
+```{r}
+paste0("Size of `reads_5K`: ", format(object.size(reads_5K),units = "MB"))
+paste0("Size of", "    ", "`GC_5K`: ", format(object.size(GC_5K),units = "MB"))
+
+## find the 10 largest objects in the base package 
+z = sapply(ls(envir = baseenv()), function(x)
+  object.size(get(x, envir = baseenv())))
+as.matrix(rev(sort(z))[1:10])
+
+```
+
+We can easily share these "leaner" files across computers.
+
+```{r, eval = FALSE}
+save(reads_5K, GC_5K,file = file.path(dir_path=dir_name,"reads_gc_5K.rda"))
+
+```
+
+We can now clean our memory from the separate files that we have merged.
+```{r, eval = FALSE}
+## find the 10 largest objects in the base package 
+z = sapply(ls(envir = baseenv()), function(x)
+  object.size(get(x, envir = baseenv())))
+as.matrix(rev(sort(z))[1:10])
+
+# Remove from memory
+rm("reads_5K")
+gc()  # garbage collection
+
+ls()  # list objects in the environment
+gc()
+```
+
+## Read data
+
+Let's read the coverage (reads_gc_5K) file that we have just saved:
+
+```{r}
+# Coverage reads_5K
+reads_file_5K = file.path(dir_name, "reads_gc_5K.rda")
+reads_gc_5K = loadRData(reads_file_5K)
+GC_5K = reads_gc_5K$GC_5K
+reads_5K = reads_gc_5K$reads_5K
+```
+
+Make GC_5K into percentages
+```{r}
+if(any(GC_5K>1)){ # This makes sure I don't repeat the command
+  GC_5K = GC_5K / 5000
+}
+```
+
+
+
+# How to show scatter plots with multiple points?
+
+## Graphical 'cosmetic' alterations of the scatter plot
+
+First attempt of plotting the "GC-richness" (%) vector on the horizontal axis,
+                  versus the reads-coverage (%) vector on the vertical axis.
+
+```{r}
+# reads_5K = binReads(myLocations,5000,last_read) # repeated for clarity
+plot(GC_5K,reads_5K)
+```
+
+
+# Rescaling the view
+Obviously problematic because the most extreme outliers force us to smush all the other observations at the bottom of the graph, in order to maintain the scaled distance from the uppermost outlier. \n
+
+To rescale, let's first set a limit to the y axis (of 800, no limit for x axis). 
+By truncating our y axis, we zoom in our view such that any extremely high outliers are out of the frame.
+
+```{r}
+plot(GC_5K,reads_5K,ylim = c(0,800))
+```
+
+Now the curved correlation is more evident:
+We first see a steep upwards slope for bins that have <40% GC content.
+At a certain point, that slope begins to moderate and then it starts to drop and even *decrease*.
+
+#### Adjusting the transparency of the points
+
+- The rgb command returns a color with 4 parameters:
+      (red, green, blue, full)
+- `full` default is 1
+- The default color black has `(0,0,0,1)`
+- Changing to `(0,0,0,0.5)` will make it half transparent, making it easier to identify denser areas with overlapping circles
+We will also select a smaller size using the `cex` parameter.
+
+
+```{r}
+# plotting with smaller points & higher transparency of filling
+plot(GC_5K,reads_5K,col=rgb(0,0,0,0.2), ylim = c(0,500),cex = 0.5)
+```
+
+
+### Sampling points
+ 
+```{r}
+# important to set seed ! 
+set.seed(100) 
+samp = sample(length(GC_5K),1000)
+samp[1:10]
+plot(GC_5K[samp],reads_5K[samp], ylim = c(0,500),cex = 0.5)
+```
+
+
+#### Discussion: Why random sampling
+
+The `sample` command is defined here to randomly select 1000 points from the data stored in the vectors `GC_5K` and `reads_5K`. \n 
+
+This random sampling ensures that the subset of data points used for plotting is not biased towards any particular part of the dataset, which can help in making more accurate inferences about the entire dataset. \n
+
+In our case, we know that the data has an inherent bias due to the build of the chromosome. In Lab 1 we learned that there are areas along the ends of the chromosome that are more "GC-rich", so to speak. And in Lab 3 we recognized a strong correlation between the Reads-Coverage of a certain region, and to which extent is that region considered to be "GC-rich". \n
+
+In other words, Reads Coverage depends on GC-richness, and GC-richness depends on where the region of interest is located along the chromosome.
+
+#### Discussion: Why set.seed?
+
+The set.seed() function is used to initialize the random number generator with a specific seed value, in this case, 100. This ensures that the random sampling is reproducible. If you run the same code with the same seed value, you will get the same random sample each time. Setting a seed is important for reproducibility in data analysis, especially when sharing code or when you want to ensure that the results can be replicated by others.
+
+
+### Density estimator (`smoothScatter`)
+
+```{r}
+plot(GC_5K,reads_5K,col=rgb(0,0,0,0.2), ylim = c(0,500),cex = 0.5)
+```
+
+```{r}
+smoothScatter(GC_5K,reads_5K, ylim = c(0,500))
+```
+
+## *Linear* Regression Line
+
+Assumed model: 
+$$ Y_k = \beta_1 \cdot (GC)_k + \beta_0 + \epsilon_k, \\
+s.t. \qquad \Bbb E[\epsilon_k]=0 $$
+
+Use the `lm()` command.
+
+```{r}
+reg_1 = lm(reads_5K~GC_5K)
+# Bias term (intercept `b`) added by default
+# To remove default intercept & return only slope:
+# reads_5K ~ GC_5K + 0
+
+print(reg_1)
+```
+## Interpreting Regression Coefficients
+
+At $(GC)_k=0$ we expect to see a coverage per base of $\beta_0$, given that no Cs or Gs have been sequenced. \n
+
+Each time $(GC)_k$ increases by 1 unit (i.e. by 1% of GC saturation) we expect to see an increase of $\beta_1$ in coverage (number of reads) per base of $\beta_0$, given that no Cs or Gs have been sequenced. \n
+
+To demonstrate, I'll use the original results from Yuval's lecture: \n
+- The slope coefficient $\beta_1$ is 450. \n
+- The intercept (bias term) $\beta_0$ is (-23). 
+
+This means that: \n
+- A ‘10%’ increase in GC is estimated to add ~45 reads.
+- Supposedly, if no Gs or Cs have been sequenced (‘0%’ GC), we expect a _decrease_ of ~22 reads. This doesn't make sense because a count of something must be non-negative value.
+
+
+```{r}
+
+# A ‘10%’ increase in GC estimated to add ~99 reads.
+
+## |==========================================|
+## |  1 GC_5K unit  |  a  * (1 unit) =  | ... |  
+## |________________|___________________|_____|
+## |      0.01 (1%) | 450 *     0.01 =  | 4.5 |  
+## |________________|___________________|_____|
+## |      0.1 (10%) | 450 *     0.1  =  | 45  |  
+## |________________|___________________|_____|
+## |      0.1 (10%) | 990 *     0.1  =  | 99  |  
+## |==========================================|
+```
+
+Additional information from the $lm()$ output can be accessed using `summary`:
+
+```{r}
+sum_reg_1 = summary(reg_1)
+print(sum_reg_1)
+```
+
+The summary of the linear model includes: 
+
+- The function call
+- The distribution of the residuals
+- Inference for model coefficients
+- Anova statistics
+
+Access to the coefficient inference:
+
+```{r}
+print(sum_reg_1$coefficients)
+
+# Parameter estimates 
+print(sum_reg_1$coefficients[,1])
+
+# Std. Error
+print(sum_reg_1$coefficients[,2])
+
+# t statistics
+print(sum_reg_1$coefficients[,3])
+
+```
+
+The lm has many built in functionalities.
+Here are the saved fields
+```{r}
+names(reg_1)
+```
+
+The standard plots...
+
+See http://data.library.virginia.edu/diagnostic-plots/
+```{r}
+plot(reg_1) 
+```
+
+How can we check the regression line's goodness of fit?
+
+1. Plotting residuals against the explanatory variable
+
+
+```{r}
+plot(reg_1$model$GC_5K,
+     reg_1$residuals)
+```
+
+$$ \textit{e}_i \text{ Part of this text is written in } \textit{italic} $$
+
+Again, we need to rescale (by truncating the y axis) so we can see something
+
+```{r}
+
+plot(reg_1$model$GC_5K,reg_1$residuals,
+     ylim = c(-500,500),cex = 0.5, col = rgb(0,0,0,0.5))
+
+```
+
+Discussion: 
+- What is the diagonal line? 
+- Is this a good fit?
+
+If there are many explanatory variables, we can plot against fitted values
+```{r}
+plot(reg_1$fitted.values,reg_1$residuals,ylim = c(-500,500),cex = 0.5, col = rgb(0,0,0,0.5))
+
+```
+
+2. Add a regression line to the original plot.
+
+If the line is straight, can simply use the `abline` command
+```{r}
+plot(GC_5K,reads_5K,ylim = c(0,500), cex = 0.3 )
+# In a-b line, intercept is a and slope is b
+abline(a=reg_1$coefficients[1],b=reg_1$coefficients[2],col = 4, lw=3)
+```
+
+In cases where the line is not straight, we need to use the predict command:
+
+1. Prepare sorted points for the "x" variable. The
+data structure needs to be a list / data-frame with the correct variable name. 
+
+```{r}
+#We'll use regular intervals so the line would come out nicely
+predict_data = data.frame(GC_5K = seq(0, 0.7, 0.01))
+```
+
+2. Use predict(model, predict_data) to get predictions. 
+
+```{r}
+predict_data$yhat = predict(reg_1, predict_data)
+```
+
+```{r}
+plot(GC_5K,reads_5K,ylim = c(0,500), cex = 0.3 )
+
+# lines only works well if x variable is sorted. 
+lines(predict_data$GC_5K, predict_data$yhat, col=4, lw = 3)
+```
+
+
+
+3. Measure quantitatively using the residuals
+
+Root mean squared error: 
+\[rmse(\hat{Y}, Y) = \sqrt{\frac{1}{K}\sum_k (Y_k-\hat{Y}_k)^2} = \sqrt{\frac{1}{K}\sum_k r_k^2}\]
+
+```{r}
+reg_1_res = reg_1$residuals  # Can use this to estimate SD or MSE
+rmse = sqrt(mean(reg_1_res^2) )
+print(rmse)
+```
+
+But this may be strongly affected by outliers. What are more robust measures? 
+
+
+## Outlier removal
+
+### Removing first batch of outliers
+```{r}
+
+plot(GC_5K,reads_5K,ylim = c(0,500),cex = 0.5)
+abline(v = 0.1, col = 2 , lw= 4)
+
+# for each small_GCs[i] if GC content in bin i is below 10% sets T, else F
+small_GCs = GC_5K < 0.1
+
+
+# How many are there? 
+paste0("Number of outliers with low GC%: ", sum(small_GCs)) 
+
+# Relative count: sum(small_GCs)/length(small_GCs)
+paste0("Percent of outliers with low GC%: ", round(mean(small_GCs),2)) 
+
+```
+
+### Spatial orientation of low-GC outliers
+
+Where are they located along the chromosome?
+We'll make a vector of digits that code to different colors: 
+1 (black) for regular points, 2(red) for small_GCs.
+
+```{r}
+
+par(mfcol = c(2,1))
+
+#vector of `1`s which code to white points
+col_line = rep(0, length(GC_5K))
+#all entries that are too small, replace `1` w/ color  
+col_line[small_GCs]=rgb(1,0,0.35,0.5)
+plot(GC_5K, col = col_line)
+
+col_line2 = rep(0, length(GC_5K))
+col_line2[!small_GCs]=rgb(1,1,1,0.5)
+plot(GC_5K, col = col_line2)
+# We may consider removing only the ones near the center of the chromosome
+
+# plot(GC_5K[small_GCs])
+# plot(GC_5K[!small_GCs])
+par(mfcol = c(1,1))
+```
+
+### Reestimate without small_GC outliers
+
+
+```{r}
+reg_2 = lm(reads_5K~GC_5K,subset = !small_GCs)
+
+
+
+plot(GC_5K,reads_5K,ylim = c(0,500),cex = 0.5)
+# In a-b line, intercept is a and slope is b
+abline(a=reg_1$coefficients[1],b=reg_1$coefficients[2],col = 4, lw=3)
+abline(a=reg_2$coefficients[1],b=reg_2$coefficients[2],col = 2, lw=3)
+
+```
+
+## The meaning of confidence intervals for the wrong model
+
+Lets' compute approximate CIs for the parameters
+```{r}
+plot(GC_5K,reads_5K,ylim = c(0,500),cex = 0.5, col = rgb(0,0,0,0.5))
+
+sum_reg_2 = summary(reg_2)
+# also draw the +-2 SD intervals for the mean
+lower_bd_a = sum_reg_2$coefficients[1,1]-2*sum_reg_2$coefficients[1,2]
+upper_bd_a = sum_reg_2$coefficients[1,1]+2*sum_reg_2$coefficients[1,2]
+
+lower_bd_b = sum_reg_2$coefficients[2,1]-2*sum_reg_2$coefficients[2,2]
+upper_bd_b = sum_reg_2$coefficients[2,1]+2*sum_reg_2$coefficients[2,2]
+abline(a=lower_bd_a,b=lower_bd_b,col = 4, lw=3,lt=2)
+abline(a=upper_bd_a,b=upper_bd_b,col = 4, lw=3,lt=2)
+```
+
+A better interval uses also the covariance between the parameters. 
+
+```{r}
+
+plot(GC_5K,reads_5K,ylim = c(0,500),cex = 0.5, col = rgb(0,0,0,0.5))
+conf_band = predict(reg_2, list(GC_5K = (0:4000)/5000), interval="confidence") 
+lines((0:4000)/5000, conf_band[,2],col = 4,lt=3,lw=3)
+lines((0:4000)/5000, conf_band[,3],col = 4,lt=3,lw=3)
+```
+
+But this is obviously wrong !! 
+
+Reminder:
+
+$$ \text{for } X = (1,GC) \\ b_1 = ((\mathbf{X}^\top X)^{-1} \mathbf{X}^\top Y) $$
+
+Then 
+$$ \text{It thus follows that: } \ b_1 = \frac{cov(gc, coverage)}{var(gc)}$$
+
+$$\text{is an estimator for } \ \beta_1 = \frac{Cov(GC, Coverage)}{Var(GC)}.$$
+
+
+# Part 2, non-parametric regression
+
+
+Simulate data
+
+```{r}
+set.seed(100)
+x = sort(c(runif(100,-5,5)))
+y = sin(x) + 0.5*x + 0.03*x^2 + rnorm(100)
+plot(x,y,cex=0.8)
+# Plot true equation
+lines(x,sin(x) + 0.5*x + 0.03*x^2)
+
+plot_sim = function(x,y,lim_y = c(-4,3.5)){
+  plot(x,y, ylim = lim_y)
+  lines(x,sin(x) + 0.5*x + 0.03*x^2)
+}
+
+```
+
+
+
+## A problem with polynomial data
+
+```{r}
+plot_sim(x,y, lim_y = c(-6,3))
+cube_mod = lm(y~I(x^3)+I(x^2)+x)
+lines(x, predict(cube_mod),lw=2,col=3)
+
+# What happens when we change a few small values
+y_corrupt = y; y_corrupt[1:5]=-6
+cube_mod_corrupt = lm(y_corrupt~I(x^3)+I(x^2)+x)
+points(x,y_corrupt,cex = 0.7,pch = 'x')
+lines(x, predict(cube_mod_corrupt),lw=2,col=4)
+```
+
+
+## Polynomial in regions
+Set up regions ("knots"):
+```{r}
+plot(GC_5K,reads_5K,ylim = c(0,500),cex = 0.5, col = rgb(0,0,0,0.5))
+abline(v=c(0.3,0.5),lt=2)
+```
+
+```{r}
+
+lwr_seg = 0.3
+upr_seg = 0.5
+
+
+# creating a group of `knots`
+grp = 1+(GC_5K>lwr_seg)+(GC_5K>upr_seg)
+
+# count number of observations per segment
+knitr::kable(table(grp), col.names = c("Segment","#Dots"))
+
+```
+
+```{r}
+lim.pts = c(-5,-2,2,5)
+new = data.frame(x=c(seq(-5,-2.001,len=20),seq(-1.999,1.999,len=30),seq(2.001,5,len=20)))
+
+plot_sim = function(x,y){
+  plot(x,y)
+  lines(x,sin(x) + 0.5*x + 0.03*x^2)
+  abline(v=c(-2,2), lt=2)
+}
+
+```
+
+Approximating by a piece-wise constant function
+```{r}
+
+pwc = by(y,grp,mean) # Mean for each group
+plot_sim(x,y)
+lines(c(-5,-2),c(pwc[1],pwc[1]),col="blue",lwd=2)
+lines(c(-2,2),c(pwc[2],pwc[2]),col="blue",lwd=2)
+lines(c(2,5),c(pwc[3],pwc[3]),col="blue",lwd=2)
+#res = y-pwc[grp]
+#plot(res[1:(length(y)-1)],res[2:length(y)])
+```
+
+Approximating by a piece-wise linear function
+```{r}
+plot_sim(x,y)
+for (i in 1:3){
+  x.i = x[grp==i]
+  y.i = y[grp==i]
+  lr.i = lm(y.i~x.i)$coefficients
+  lines(lim.pts[c(i,i+1)],lim.pts[c(i,i+1)]*lr.i[2]+lr.i[1],col="blue",lwd=2)
+}
+```
+
+A new version of getting piece-wise constant
+```{r}
+# pw constant - another look
+plot_sim(x,y)
+pwc_const = lm(y ~ I( (x< -2)) + I((x<2 & x>-2)) + I((x>2)))
+summary(pwc_const)
+lines(new$x,predict(pwc_const,new),lwd=2,col='blue')
+```
+
+A new version of getting piece-wise linear
+```{r}
+plot_sim(x,y)
+pwc_lin = (lm(y ~ I(x*(x< -2)) + I((x<2 & x>-2)) + I((x>2)) + I(x*(x<2 & x>-2)) + I(x*(x>2))))
+lines(new$x,predict(lm(y ~ I(x*(x< -2)) + I((x<2 & x>-2)) + I((x>2)) + I(x*(x<2 & x>-2)) + I(x*(x>2))),new),lwd=2,col='blue')
+```
+
+```{r}
+plot(x, -x*(x< -2),col = 0)
+lines(x, -x*(x< -2))
+lines(x, x^2*(x< -2)/5, col = 2)
+```
+
+Region regression can be run on each region separately, though it makes it a bit harder to get residuals. 

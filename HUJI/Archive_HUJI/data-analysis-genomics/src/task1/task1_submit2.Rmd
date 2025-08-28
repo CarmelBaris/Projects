@@ -1,0 +1,195 @@
+---
+title: "HW1"
+author: "Group 6"
+date: "21 May 2024"
+output:
+  html_document:
+    code_folding: show
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+Group: 6
+
+Group members (Name, ID, email)
+
+ - Shawn Yakir , 315714980, shawnyakir@gmail.com  
+ - Sarah Levitz, 324673623, sarah.levitz@mail.huji.ac.il
+ - Carmel Baris, 318455276, carmel.baris@mail.huji.ac.il
+
+
+### Libraries used
+
+Please load all libraries that you will use throughout the code in this block.
+
+TODO:
+```{r libraries, warning=FALSE}
+library("tidyr")
+```
+
+
+### Paths and Data
+
+
+```{r paths}
+dir_name = "~/Carmel/RProjects/Lab_Benjamini"
+chr1_str_path = sprintf("%s/data/%s", dir_name, "chr1_str_10M_30M.rda")
+load(file = chr1_str_path)
+```
+
+
+## Introduction 
+
+Short intro discussing the goal of this week.
+
+## Part 1
+
+For more efficient analysis, we parse the given chromosome as a factor() object.
+Then we count the number of times each nucleobase appears in the data.
+
+```{r part1, fig.width=5, fig.height=5}
+
+chr1_ls = unlist(strsplit(chr1_str_10M_30M, split = ""))
+chr1_line = factor(chr1_ls, c("A","T","C","G")) #assigns int to each type
+N = length(chr1_vec)
+tb = table("count (millions)"=chr1_vec)
+mt = sum(is.na(chr1_vec))
+cat("known:", sum(tb), "\n")
+cat("unknown:", (mt)/N*100, "%\n")
+round(tb/1000000,2)
+```
+
+Evidently, our data includes a total of 20M+1 nucleobases. \n
+This includes 1.25% 'unknown' bases that have failed to be determined in the DNA sequencing procedure. \n
+Out of the non-empty bases, A and T have about 1M more occurrences than C and G.
+
+## Part 2
+
+The following function receives a region of the reference genome, and cells of 1000 nucleobases each, and sums the number of times a given base appears in the 
+
+```{r part2, echo=FALSE, fig.keep='none'}
+
+subSnippet <- function(start_indx=1, cell_size=1000, chromo=chr1_vec){
+  #' For each nucleobase, counts occurrences in region of interest.
+  #'
+  #' @param start_indx location of first nucleobase included in analysis
+  #' @param cell_size number of consecutive nucleobases to be included
+  
+  beg_region = start_indx
+  end_region = beg_region + cell_size - 1
+  chr1_snippet = chr1_vec[beg_region:end_region]
+  return(chr1_snippet)
+}
+
+test1 = subSnippet()
+table("test snippet:" =test1)
+```
+
+
+## Part 3
+
+To better understand the distribution of each nucleobase throughout the given chromosome, we plot the histogram and density of each one. 
+
+```{r part3, fig.width=5, fig.height=5}
+# create vector of zeros
+bin_size = 1000
+n_bins = ceiling(N/bin_size)
+bin_indices = 1:n_bins
+
+# create empty data frame to store counts
+counts_df = data.frame(bin_index = bin_indices,
+                       A_count = numeric(n_bins),
+                       T_count = numeric(n_bins),
+                       C_count = numeric(n_bins),
+                       G_count = numeric(n_bins))
+
+# fill counts in the data frame
+for (i in 1:n_bins){
+  start_bin = 1 + (i-1)*bin_size
+  counts_df$A_count[i] = sum(subSnippet(start_indx = start_bin) == "A")
+  counts_df$T_count[i] = sum(subSnippet(start_indx = start_bin) == "T")
+  counts_df$C_count[i] = sum(subSnippet(start_indx = start_bin) == "C")
+  counts_df$G_count[i] = sum(subSnippet(start_indx = start_bin) == "G")
+}
+
+# Get the maximum density value across all nucleotide counts
+max_density <- max(c(density(counts_df$A_count, na.rm = T)$y,
+                     density(counts_df$T_count, na.rm = T)$y,
+                     density(counts_df$C_count, na.rm = T)$y,
+                     density(counts_df$G_count, na.rm = T)$y), na.rm = T)
+
+# Create a layout with space for the legend
+layout(matrix(c(1,1,2,1), 2, 2, byrow = TRUE), heights = c(4,1))
+par(mar = c(5, 4, 4, 2) + 0.1)
+
+# Graphics
+col1=rgb(1, 0, 0, 0.5)
+col2=rgb(0, 1, 0, 0.5)
+col3=rgb(0, 0, 1, 0.5)
+col4="gray"
+wid = 3
+
+# Set the y-axis limits
+yylim <- c(0, max_density * 1.1)
+xxlim <- range(c(counts_df$A_count, counts_df$T_count, counts_df$C_count, counts_df$G_count), na.rm = T)
+
+# Plot the density curves
+plot(density(counts_df$A_count, na.rm = T),
+     main = "Nucleobase Counts", xlab = "Count", ylab = "Density",
+     col = col1, lwd = wid, 
+     xlim = xxlim, ylim = yylim)
+
+lines(density(counts_df$T_count, na.rm = T), col = col2, lwd = wid)
+lines(density(counts_df$C_count, na.rm = T), col = col3, lwd = wid)
+lines(density(counts_df$G_count, na.rm = T), col = col4, lwd = wid)
+
+# Add legend
+legend("topleft", legend = c("A", "T", "C", "G"),
+       col = c(col1, col2, col3, col4), lwd = wid,
+       lty = 1, bty = "n")
+
+```
+sss
+
+```{r}
+
+#create vector of zeros 
+bin_size = 1000
+n_bins = ceiling(N/bin_size)
+A_count = numeric(N/bin_size) 
+T_count = numeric(N/bin_size) 
+G_count = numeric(N/bin_size) 
+C_count = numeric(N/bin_size) 
+
+# fill vector:
+for (i in 1:n_bins){
+  start_bin = 1 + (i-1)*bin_size
+  dat = data.frame()
+  A_count[i] = sum(subSnippet(start_indx = start_bin) == "A")
+  T_count[i] = sum(subSnippet(start_indx = start_bin) == "T")
+  C_count[i] = sum(subSnippet(start_indx = start_bin) == "C")
+  G_count[i] = sum(subSnippet(start_indx = start_bin) == "G")
+}
+
+#create histograms
+p1 = hist(A_count,col=rgb(1,0,0,0.25))
+p2 = hist(T_count,col=rgb(0,0,1,0.25))
+p3 = hist(C_count,col=rgb(0,0,1,0.25))
+p4 = hist(G_count,col=rgb(0,0,1,0.25))
+
+plot(p1,col=rgb(1,0,0,0.25))
+plot(p2,col=rgb(0,0,1,0.25),add=T)
+
+plot(p3,col=rgb(1,0,0,0.25))
+plot(p4,col=rgb(0,0,1,0.25),add=T)
+# plot(p1, col=rgb(0,0,1,0.25))  # first histogram
+```
+
+## Part 3
+
+## Part 4
+
+## Short summary
+
+Something you've learned. 

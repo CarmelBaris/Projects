@@ -1,0 +1,171 @@
+---
+title: "Lab Task 7"
+author: "Group 6"
+date: "`r format(Sys.time(), '%d/%m/%y')`"
+output:
+  html_document:
+    code_folding: show
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Paths
+```{r}
+dir_name = "~/Carmel/RProjects/Lab_Benjamini/data"
+# dir_name = "/Users/alevi/Downloads/"
+# dir_name = "\\Users\\shawn\\Desktop\\"
+```
+
+### Library
+```{r}
+library('data.table')
+```
+
+### Load data
+```{r}
+load(sprintf("%s/reads_100_A2.rda",dir_name)) #t(umor)
+load(sprintf("%s/reads_100_B2.rda",dir_name)) #n(ot)
+load(sprintf("%s/GC_100.rda",dir_name))
+```
+
+### Binning
+```{r n_reads}
+binData100 = function(vec_100,size_in_hundreds){
+  vec_100 = matrix(vec_100, nr = size_in_hundreds)
+  return(colSums(vec_100))
+}
+
+binsize_hundreds = 25
+reads_2.5K_n = binData100(reads_100_B2, binsize_hundreds)
+reads_2.5K_t = binData100(reads_100_A2, binsize_hundreds)
+GC_2.5K = binData100(GC_100, 25)
+if(any(GC_2.5K>1)){GC_2.5K = GC_2.5K / binsize_hundreds} # convert GC_2.5K into percentages
+
+```
+
+
+
+```{r}
+# mar = c(bottom, left, top, right)
+# margin size specified in inches.
+set.seed(50)
+samp1 = sample(length(reads_2.5K_n),2500)
+
+# The default is c(5, 4, 4, 2) + 0.1.
+par(mfcol =c(2,1),mar =c(1,3,1,1)) #limiting margins truncates labels
+plot(GC_2.5K[samp1],reads_2.5K_n[samp1],ylim = c(0,400),xlim = c(0,.75), cex = 0.4, pch=20, ylab="Healthy Reads", xlab="GC (%)")
+plot(GC_2.5K[samp1],reads_2.5K_t[samp1],ylim = c(0,400),xlim = c(0,.75),cex = 0.4, pch=20,  ylab="Tumor Reads")
+par(mfcol =c(1,1))
+
+```
+
+
+# Learn parameters from chromosome 1
+
+```{r}
+l_1n = length(reads_2.5K_n)
+l_1t = length(reads_2.5K_t)
+
+par(mfcol = c(1,1),mar = c(3,3,3,3))
+plot(GC_2.5K[samp1],reads_2.5K_n[samp1],ylim = c(0,400),xlim = c(0.2,.75), cex = 0.5, pch=20)
+
+GC=GC_2.5K[1:l_1n]
+mod_1n = lm(reads_2.5K_n~poly(GC, degree = 3),subset = reads_2.5K_n>50 & reads_2.5K_n<400 )
+
+pred_range = seq(0.2,0.75,0.01)
+resp_n = predict(mod_1n,list(GC=pred_range))
+lines(pred_range, resp_n,col = 4,lw=3)
+
+```
+
+
+
+
+
+```{r}
+preds1n = predict(mod_1n,list(GC=GC_2.5K))
+
+```
+
+
+
+
+
+```{r}
+par(mfcol = c(1,1))
+plot(GC_2.5K[samp1],reads_2.5K_t[samp1],ylim = c(0,400),xlim = c(0.2,.75), cex = 0.5, pch=20)
+
+GC=GC_2.5K[1:l_1t]
+mod_1t = lm(reads_2.5K_t~poly(GC, degree = 3),subset = (reads_2.5K_t>50)&(reads_2.5K_t<500))
+
+pred_range = seq(0.2,0.75,0.01)
+resp_t = predict(mod_1t,list(GC=pred_range))
+lines(pred_range, resp_t,col = 4,lw=3)
+preds1t = predict(mod_1t,list(GC=GC_2.5K))
+
+lines(pred_range, resp_n,col = 2,lw=3)
+
+```
+
+
+
+### One sample corrections
+
+```{r}
+one_sample_correct = function(samp, preds) {
+  one_correct = (samp)/(preds)
+  return(one_correct)
+}
+
+```
+
+
+
+```{r}
+corrected_1n = 
+  one_sample_correct (reads_2.5K_n,preds1n[1:l_1n])
+uncorrected_1n = (reads_2.5K_n)/median(reads_2.5K_n) 
+
+corrected_1t = 
+  one_sample_correct (reads_2.5K_t,preds1t[1:l_1t])
+uncorrected_1t = (reads_2.5K_t)/median(reads_2.5K_t) 
+```
+
+
+
+
+
+```{r}
+par(mfcol = c(2,1),mar = c(2,2,2,2))
+range_a = 5000:4000
+plot(corrected_1t[range_a],
+     ylim = c(0,2.5),cex = 0.5,pch=20,main = "Tumor Corrected")
+abline(h=1,col=4,lw=1.5)
+plot(uncorrected_1t[range_a],
+     ylim = c(0,2.5),cex = 0.5,pch=20,main = "Tumor Uncorrected")
+abline(h=1,col=4,lw=1.5)
+
+```
+
+
+
+
+
+```{r}
+par(mfcol = c(2,1),mar = c(2,2,2,2))
+range_a = 5000:4000
+plot(corrected_1n[range_a],
+     ylim = c(0,2.5),cex = 0.5,pch=20, main = "Healthy Corrected")
+abline(h=1,col=4,lw=1.5)
+plot(uncorrected_1n[range_a],
+     ylim = c(0,2.5),cex = 0.5,pch=20, main = "Healthy Uncorrected")
+abline(h=1,col=4,lw=1.5)
+
+```
+
+

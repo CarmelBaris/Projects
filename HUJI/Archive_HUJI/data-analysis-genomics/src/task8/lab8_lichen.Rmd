@@ -1,0 +1,604 @@
+---
+title: "HW8"
+author: "Group 4"
+date: "16 July 2024"
+output:
+  html_document:
+    code_folding: show
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+Group: 
+
+Group members (Name, ID, email)
+
+- Sigal Falk, 206682031, Sigal.falk@mail.huji.ac.il
+- Lihen Laski, 316539774, lihen.laski@mail.huji.ac.il
+- Iska Yanir-Amzaleg, 318928587, iska.yanir@mail.huhi.ac.il
+
+
+
+### Libraries used
+
+```{r libraries}
+
+library(ggplot2)
+library(reshape2)
+
+if (!require('data.table')){
+  install.packages('data.table')
+  library('data.table')
+}
+# library('tictoc')
+
+if (!require('manipulate')){
+  install.packages('manipulate')
+  library('manipulate')
+}
+library(splines)
+# install.packages("dplyr", repos = "https://cran.rstudio.com/")
+library(dplyr)
+library(segmented)
+
+library('splines')
+```
+
+
+### Paths and Data
+
+### Paths
+```{r paths}
+path = "~/Carmel/RProjects/Lab_Benjamini/data"
+# path = "/Users/alevi/Downloads/"
+ # path = "\\Users\\shawn\\Desktop\\"
+```
+
+
+### Load data
+
+```{r dat}
+load(sprintf("%s/reads_100_A2.rda",path))
+load(sprintf("%s/reads_100_B2.rda",path))
+load(sprintf("%s/GC_100.rda",path))
+```
+
+
+
+```{r processing_dat}
+short_GC_100 <- GC_100[0:2471993]
+# length(short_GC_100)
+# length(reads_100_A2)
+# length(reads_100_B2)
+
+# Function to merge every 25 cells
+merge_25_cells <- function(x) {
+  merged <- sapply(seq(1, length(x), by=25), function(i) sum(x[i:min(i+24, length(x))]))
+  return(merged)
+}
+
+# Apply the function to the datasets (merge every 25 cells)
+# Cell of 2500 bases
+merged_GC_100 <- merge_25_cells(short_GC_100)
+merged_reads_100_A2 <- merge_25_cells(reads_100_A2)
+merged_reads_100_B2 <- merge_25_cells(reads_100_B2)
+```
+
+
+
+## Introduction 
+
+Short intro discussing the goal of this week.
+
+
+## Preparations
+
+Remove zero values
+```{r}
+# Function to remove zero reads and corresponding GC values
+
+find_indices_zero <-function(y){
+  zero_indices <- which(y == 0)
+}
+  
+remove_zero_reads <- function(reads_t,reads_n, gc) {
+  zero_indices_t = find_indices_zero(reads_t)
+  zero_indices_n = find_indices_zero(reads_n)
+  common_zero_indices <- intersect(zero_indices_t, zero_indices_n)
+  filtered_reads_t <- reads_t[-common_zero_indices]
+  filtered_reads_n<-reads_n[-common_zero_indices]
+  filtered_gc<-gc[-common_zero_indices]
+
+  return(list(filtered_reads_t = filtered_reads_t, filtered_reads_n=filtered_reads_n, filtered_gc=filtered_gc))
+}
+
+filtered_data <- remove_zero_reads(merged_reads_100_A2, merged_reads_100_B2, merged_GC_100)
+filtered_reads_t = filtered_data$filtered_reads_t
+filtered_reads_n <- filtered_data$filtered_reads_n
+filtered_GC = filtered_data$filtered_gc
+```
+
+Remove zero values
+```{r}
+# Function to remove zero reads and corresponding GC values
+# remove_zero_reads <- function(reads, gc) {
+#   non_zero_indices <- which(reads != 0)
+#   filtered_reads <- reads[non_zero_indices]
+#   filtered_gc <- gc[non_zero_indices]
+#   return(list(filtered_reads = filtered_reads, filtered_gc = filtered_gc))
+# }
+# 
+# # Apply the function to the datasets
+# filtered_A2 <- remove_zero_reads(merged_reads_100_A2, merged_GC_100)
+# filtered_B2 <- remove_zero_reads(merged_reads_100_B2, merged_GC_100)
+# 
+# # Extract the filtered reads and GC values
+# filtered_reads_t <- filtered_A2$filtered_reads
+# filtered_GC_t <- filtered_A2$filtered_gc
+# 
+# filtered_reads_n <- filtered_B2$filtered_reads
+# filtered_GC_n <- filtered_B2$filtered_gc
+```
+
+Remove outliers (NEED TO CHECK!)
+```{r}
+find_indices_outliers <-function(y){
+  quartile_1 <- quantile(y, 0.25)
+  quartile_3 <- quantile(y, 0.75)
+  inter_quartile_range <- quartile_3 - quartile_1
+  lower_threshold <- quartile_1 - 1.5 * inter_quartile_range
+  upper_threshold <- quartile_3 + 1.5 * inter_quartile_range
+  outlier_indices <- which(y < lower_threshold | y > upper_threshold)
+  return(outlier_indices)
+}
+
+remove_outliers <- function(y_1, y_2, x) {
+  outlier_indices_y1 = find_indices_outliers(y_1)
+  outlier_indices_y2 = find_indices_outliers(y_2)
+  common_outlier_indices <- intersect(outlier_indices_y1, outlier_indices_y2)
+  filtered_y1 <- y_1[-common_outlier_indices]
+  filtered_y2<-y_2[-common_outlier_indices]
+  filtered_x<-x[-common_outlier_indices]
+
+  return(list(filtered_y1 = filtered_y1, filtered_y2=filtered_y2, filtered_x=filtered_x))
+}
+
+# Apply the function to the datasets
+filtered_data <- remove_outliers(filtered_reads_t, filtered_reads_n, filtered_GC)
+# filtered_data <- remove_outliers(merged_reads_100_A2, merged_reads_100_B2, merged_GC_100)
+filtered_reads_t = filtered_data$filtered_y1
+filtered_reads_n <- filtered_data$filtered_y2
+filtered_GC_t = filtered_data$filtered_x
+filtered_GC_n <- filtered_data$filtered_x
+```
+
+ 
+Remove outliers (NEED TO CHECK!)
+```{r}
+#  remove_outliers <- function(y, x) {
+#   quartile_1 <- quantile(y, 0.25)
+#   quartile_3 <- quantile(y, 0.75)
+#   inter_quartile_range <- quartile_3 - quartile_1
+#   lower_threshold <- quartile_1 - 1.5 * inter_quartile_range
+#   upper_threshold <- quartile_3 + 1.5 * inter_quartile_range
+#   non_outlier_indices <- which(y >= lower_threshold & y <= upper_threshold)
+#   filtered_y <- y[non_outlier_indices]
+#   filtered_x <- x[non_outlier_indices]
+#   return(list(filtered_y = filtered_y, filtered_x = filtered_x))
+#  }
+# 
+# 
+# # Apply the function to the datasets
+# #T
+# filtered_t <- remove_outliers(filtered_reads_t, filtered_GC_t)
+# filtered_reads_t = filtered_t$filtered_y
+# filtered_GC_t = filtered_t$filtered_x
+# 
+# #N
+# filtered_n <- remove_outliers(filtered_reads_n, filtered_GC_n)
+# filtered_reads_n <- filtered_n$filtered_y
+# filtered_GC_n <- filtered_n$filtered_x
+```
+
+
+### Knots selection and Bspline apply
+create hat_f g for each sample (cancer and healthy separately)
+hat_f_t
+hat_f_n
+```{r}
+bspline_mod <- function(x, y,knots, degree) {
+  mod = lm(y~bs(x,knots = knots, degree = degree))
+return (mod)
+}
+
+knots = c(11,13,16) 
+degree=3 ### CHECK IF WORNG!!!
+
+model_t = bspline_mod(filtered_GC_t, filtered_reads_t, knots, degree)
+model_n = bspline_mod(filtered_GC_n, filtered_reads_n, knots, degree)
+```
+
+
+
+```{r}
+
+# # find subset
+# findSubset <- function(start_base, end_base, vec, cell_size){
+#   cell_start = start_base/cell_size
+#   cell_end = end_base/cell_size
+#   chromosome_range = cell_start:cell_end
+#   return (vec[chromosome_range])
+# }
+
+```
+
+
+### Show hat_f_t (for Cancer data)
+```{r}
+# T
+df_t <-data.frame(filtered_GC_t, filtered_reads_t)
+resp_t = predict(model_t,df_t)
+df_t$resp_t = resp_t
+df_t_sorted <- df_t[order(df_t$filtered_GC_t), ]
+
+
+plot(filtered_GC_t, filtered_reads_t,
+     main = "Reads VS GC content Cancer",
+     xlab = "GC content [%]",
+     ylab = cat("Reads per", 2500, "bases"),
+     xlim = c(5, 20),
+     ylim = c(0,400))
+
+# abline(v = 11, col = 2 , lw= 4)
+# abline(v = 13, col = 2 , lw= 4)
+# abline(v = 16, col = 2 , lw= 4)
+
+# Add a trendline
+lines(df_t_sorted$filtered_GC_t, df_t_sorted$resp_t, col=4, lw= 4)
+
+
+```
+
+### Show hat_f_n (for Healthy data)
+```{r}
+# N
+df_n <-data.frame(filtered_GC_n, filtered_reads_n)
+resp_n = predict(model_n,df_n)
+df_n$resp_n = resp_n
+df_n_sorted <- df_n[order(df_n$filtered_GC_n), ]
+
+
+plot(filtered_GC_n, filtered_reads_n,
+     main = "Reads VS GC content Healthy",
+     xlab = "GC content [%]",
+     ylab = cat("Reads per", 2500, "bases"),
+     xlim = c(5, 20),
+     ylim = c(0,200))
+
+# abline(v = 11, col = 2 , lw= 4)
+# abline(v = 13, col = 2 , lw= 4)
+# abline(v = 16, col = 2 , lw= 4)
+
+# Add a trendline
+lines(df_n_sorted$filtered_GC_n, df_n_sorted$resp_n, col=4, lw= 4)
+
+extrem_gc_n = which(filtered_GC_n>17)
+small_gc_n =  which(filtered_GC_n<6.5)
+abline(v = 17, col = "red" , lw= 4)
+abline(v = 6.5, col = "red" , lw= 4)
+
+
+```
+
+
+## Part 1
+
+Short explanation on method or idea. 
+
+Correction functions
+```{r}
+# One sample correction with epsilon & No correction (Median correction only)
+one_sample_correct = function(samp, preds, eps) {
+  a_hat = (samp+eps)/(preds+eps)
+  adj_med = 1/median(a_hat)
+  return(a_hat*adj_med)
+}
+
+
+# Two sample correction with epsilon (use for both with or without GC correction depends the input vectors)
+two_sample_correct_e = function(tumor, normal,eps) {
+  a_hat = (tumor+eps)/(normal+eps)
+  two_correct_aft_med = a_hat/median(a_hat,na.rm=TRUE)
+  return(two_correct_aft_med)
+}
+```
+
+
+Find specific areas in the chromozom
+```{r}
+# find subset
+findSubset <- function(start_base, end_base, cell_size){
+  cell_start = start_base/cell_size
+  cell_end = end_base/cell_size
+  chromosome_range = cell_start:cell_end
+  return (chromosome_range)
+}
+
+
+range_a = c(findSubset(25000000,30000000,2500),findSubset(75000000,80000000,2500))
+```
+
+
+One sample correction with epsilon = 1
+```{r part1}
+eps = 1
+corrected_1t = 
+  one_sample_correct (df_t$filtered_reads_t,df_t$resp_t,eps)
+uncorrected_1t = one_sample_correct(df_t$filtered_reads_t,rep(1,length(df_t$filtered_reads_t)),eps)
+
+corrected_1n =
+  one_sample_correct (df_n$filtered_reads_n,df_n$resp_n,eps)
+uncorrected_1n = one_sample_correct(df_n$filtered_reads_n,rep(1,length(df_n$filtered_reads_n)),eps)
+
+
+# Plots
+# par(mfcol = c(2,1),mar = c(2,2,2,2))
+plot(corrected_1t[range_a],main = cat("Cancer - One Sample Correction (eps=",eps,")"),
+     ylab = "estimated a",
+     ylim = c(0,3),cex = 0.5,pch=20)
+abline(h=1,col="green", lw= 2)
+
+plot(corrected_1t[range_a],main = cat("Cancer - One Sample Correction (eps=",eps,") Zoom-in"),
+     ylab = "estimated a",
+     ylim = c(0,3),xlim = c(1000,1200),cex = 0.5,pch=20)
+abline(h=1,col="green", lw= 2)
+
+plot(uncorrected_1t[range_a],main = cat("Cancer - Median Correction (eps=",eps,")"),
+     ylab = "estimated a",
+     ylim = c(0,3),cex = 0.5,pch=20)
+abline(h=1,col="green", lw= 2)
+abline(v=2000,col="orange",lt = 2, lw= 2)
+
+plot(corrected_1n[range_a],main = cat("Healthy - One Sample Correction (eps=",eps,")"),
+     ylab = "estimated a",
+     ylim = c(0,3),
+     cex = 0.5,pch=20)
+abline(h=1,col="green", lw= 2)
+
+# Highlighting specific indices in red
+# highlighted_indices <- intersect(range_a, small_gc_n)
+# points(highlighted_indices,corrected_1n[highlighted_indices], col = "red", cex = 1, pch = 20)
+
+plot(uncorrected_1n[range_a],main = cat("Healthy - Median Correction (eps=",eps,")"),
+     ylab = "estimated a",
+     ylim = c(0,3),cex = 0.5,pch=20)
+abline(h=1,col="green", lw= 2)
+abline(v=2000,col="orange",lt = 2, lw= 2)
+```
+
+One sample correction with epsilon = 100
+```{r}
+eps = 100
+corrected_1t = 
+  one_sample_correct (df_t$filtered_reads_t,df_t$resp_t,eps)
+uncorrected_1t = one_sample_correct(df_t$filtered_reads_t,rep(1,length(df_t$filtered_reads_t)),eps)
+
+corrected_1n =
+  one_sample_correct (df_n$filtered_reads_n,df_n$resp_n,eps)
+uncorrected_1n = one_sample_correct(df_n$filtered_reads_n,rep(1,length(df_n$filtered_reads_n)),eps)
+
+# find subset
+findSubset <- function(start_base, end_base, cell_size){
+  cell_start = start_base/cell_size
+  cell_end = end_base/cell_size
+  chromosome_range = cell_start:cell_end
+  return (chromosome_range)
+}
+
+
+# Plots
+# par(mfcol = c(2,1),mar = c(2,2,2,2))
+plot(corrected_1t[range_a],main = cat("Cancer - One Sample Correction (eps=",eps,")"),
+     ylab = "estimated a",
+     ylim = c(0,3),cex = 0.5,pch=20)
+abline(h=1,col="green", lw= 2)
+
+plot(corrected_1t[range_a],main = cat("Cancer - One Sample Correction (eps=",eps,") Zoom-in"),
+     ylab = "estimated a",
+     ylim = c(0,3),xlim = c(1000,1200),cex = 0.5,pch=20)
+abline(h=1,col="green", lw= 2)
+
+plot(uncorrected_1t[range_a],main = cat("Cancer - Median Correction (eps=",eps,")"),
+     ylab = "estimated a",
+     ylim = c(0,3),cex = 0.5,pch=20)
+abline(h=1,col="green", lw= 2)
+abline(v=2000,col="orange",lt = 2, lw= 2)
+
+plot(corrected_1n[range_a],main = cat("Healthy - One Sample Correction (eps=",eps,")"),
+     ylab = "estimated a",
+     ylim = c(0,3),cex = 0.5,pch=20)
+abline(h=1,col="green", lw= 2)
+
+plot(uncorrected_1n[range_a],main = cat("Healthy - Median Correction (eps=",eps,")"),
+     ylab = "estimated a",
+     ylim = c(0,3),cex = 0.5,pch=20)
+abline(h=1,col="green", lw= 2)
+abline(v=2000,col="orange",lt = 2, lw= 2)
+
+```
+
+Two sample correction with epsilon = 0.01
+```{r}
+
+# With eps_1 =100
+eps_2 = 0.01
+two_sample_with_gc = two_sample_correct_e(corrected_1t,corrected_1n,eps_2)
+two_sample_without_gc = two_sample_correct_e(uncorrected_1t,uncorrected_1n,eps_2)
+
+
+# par(mfcol = c(2,1),mar = c(2,2,2,2))
+plot(two_sample_with_gc[range_a],main = cat("Cancer - Two Sample Correction with GC (eps=",eps_2,")"),
+     ylab = "estimated a",
+     ylim = c(0,3.5),cex = 0.5,pch=20)
+abline(h=1,col="green", lw= 2)
+
+plot(two_sample_without_gc[range_a],main = cat("Cancer - Two Sample Correction without GC (eps=",eps_2,")"),
+     ylab = "estimated a",
+     ylim = c(0,3.5),cex = 0.5,pch=20)
+abline(h=1,col="green", lw= 2)
+```
+
+
+Two sample correction with epsilon = 0.1
+```{r}
+
+# With eps_1 =100
+eps_2 = 0.1
+two_sample_with_gc = two_sample_correct_e(corrected_1t,corrected_1n,eps_2)
+two_sample_without_gc = two_sample_correct_e(uncorrected_1t,uncorrected_1n,eps_2)
+
+
+# par(mfcol = c(2,1),mar = c(2,2,2,2))
+plot(two_sample_with_gc[range_a],main = cat("Cancer - Two Sample Correction with GC (eps=",eps_2,")"),
+     ylab = "estimated a",
+     ylim = c(0,3.5),cex = 0.5,pch=20)
+abline(h=1,col="green", lw= 2)
+
+plot(two_sample_with_gc[range_a],main = cat("Cancer - Two Sample Correction with GC (eps=",eps_2,")"),
+     ylab = "estimated a",
+     ylim = c(0,3.5),
+     xlim = c(1070,1099),
+     cex = 0.5,pch=20)
+abline(h=1,col="green", lw= 2)
+
+
+plot(two_sample_without_gc[range_a],main = cat("Cancer - Two Sample Correction without GC (eps=",eps_2,")"),
+     ylab = "estimated a",
+     ylim = c(0,3.5),cex = 0.5,pch=20)
+abline(h=1,col="green", lw= 2)
+```
+
+
+```{r}
+trim = function(x,l,u){ pmax(pmin(x, u), l) }
+b_range= seq(0,3,0.04)
+#use_range = 1:49000
+use_range = range_a
+par(mfcol = c(2,2))
+hist(trim(uncorrected_1t[use_range],0,3),breaks = b_range,freq = FALSE, main = "Uncorrected")
+hist(trim(corrected_1t[use_range],0,3),breaks = b_range,freq = FALSE,main = "One Sample")
+hist(trim(two_sample_without_gc[use_range],0,3),breaks = b_range,freq = FALSE, main = "Two Sample")
+hist(trim(two_sample_with_gc[use_range],0,3),breaks = b_range,freq = FALSE, main = "Two Sample + GC")
+```
+
+
+Short explanation on what we learn from the graph. 
+
+
+## Part 2
+
+```{r}
+mse <- function(actual, predicted) {
+  mean((actual - predicted)^2)
+}
+
+rmse <- function(actual, predicted) {
+  sqrt(mean((actual - predicted)^2))
+}
+
+compare_mse_for_correction <- function(vec_correct){
+  ind = 11070:11100
+  predicted_0.5 = vec_correct[11070:11100]
+  predicted_1 = vec_correct[-ind]
+  half_vector <- rep(0.5, length(predicted_0.5))
+  ones_vector <- rep(1, length(predicted_1))
+  mse_0.5 = mse(half_vector,predicted_0.5)
+  mse_1 = mse(ones_vector,predicted_1)
+  return(list(mse_0.5=mse_0.5,mse_1=mse_1))
+}
+compare_rmse_for_correction <- function(vec_correct){
+  ind = 11070:11100
+  predicted_0.5 = vec_correct[11070:11100]
+  predicted_1 = vec_correct[-ind]
+  half_vector <- rep(0.5, length(predicted_0.5))
+  ones_vector <- rep(1, length(predicted_1))
+  rmse_0.5 = rmse(half_vector,predicted_0.5)
+  rmse_1 = rmse(ones_vector,predicted_1)
+  return(list(rmse_0.5=rmse_0.5,rmse_1=rmse_1))
+}
+```
+
+
+Median correction
+```{r}
+res_med= compare_mse_for_correction(uncorrected_1t)
+res_rmse_med= compare_rmse_for_correction(uncorrected_1t)
+
+  
+cat(res_med$mse_0.5)
+cat(res_med$mse_1)
+
+cat(res_rmse_med$rmse_0.5)
+cat(res_rmse_med$rmse_1)
+```
+
+One Sample correction
+```{r}
+res_gc= compare_mse_for_correction(corrected_1t)
+res_rmse_gc= compare_rmse_for_correction(corrected_1t)
+
+  
+cat(res_gc$mse_0.5)
+cat(res_gc$mse_1)
+
+cat(res_rmse_gc$rmse_0.5)
+cat(res_rmse_gc$rmse_1)
+```
+
+Two Sample correction
+```{r}
+res_two= compare_mse_for_correction(two_sample_without_gc)
+res_rmse_two= compare_rmse_for_correction(two_sample_without_gc)
+
+  
+cat(round(res_two$mse_0.5,4))
+cat(round(res_two$mse_1,4))
+
+cat(round(res_rmse_two$rmse_0.5,4))
+cat(round(res_rmse_two$rmse_1,4))
+```
+
+Two Sample + GC correction
+```{r}
+res_two_gc= compare_mse_for_correction(two_sample_with_gc)
+res_rmse_two_gc= compare_rmse_for_correction(two_sample_with_gc)
+
+  
+cat(round(res_two_gc$mse_0.5,4))
+cat(round(res_two_gc$mse_1,4))
+
+cat(round(res_rmse_two_gc$rmse_0.5, 4))
+cat(round(res_rmse_two_gc$rmse_1, 4))
+```
+
+# draft
+```{r}
+ind = 11070:11100
+predicted_0.5 = two_sample_with_gc[11070:11100]
+predicted_1 = two_sample_with_gc[-ind]
+b_range= seq(0.5,3.5,0.05)
+hist(predicted_0.5)
+hist(predicted_1)
+summary(predicted_1)
+summary(predicted_0.5)
+
+sum(predicted_1[predicted_1<(mean(predicted_1)-2*0.09)])/length(predicted_1)
+sum(predicted_1[predicted_1>(mean(predicted_1)+2*0.09)])/length(predicted_1)
+
+sum(predicted_0.5[predicted_0.5<(mean(predicted_0.5)-2*sd(predicted_0.5))])/length(predicted_0.5)
+sum(predicted_0.5[predicted_0.5>(mean(predicted_0.5)+2*sd(predicted_0.5))])/length(predicted_0.5)
+
+```
+
+Something you've learned. 
