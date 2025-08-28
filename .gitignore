@@ -1,40 +1,39 @@
-# Figures and temporary files
+# Figures, documents, media, and archives
+**/figure-html/
 *.html
 *.png
 *.svg
-figure-html/       # RMD-generated figures
-
-# Documents and media
 *.pdf
 *.doc
 *.docx
 *.pptx
 *.mp3
 *.mp4
-*.zip              # add: ignore exported zip archives
+*.zip
 
-# Data
+# Data and large files
 *.rda
 *.gz
 *.fastq
-
-# Large data folders
-class-vids/
-data/TCGA-*        # large genomics files
-data/reads_*       # read files
+**/class-vids/
+**/data/TCGA-*
+**/data/reads_*
 
 # OS and editor files
 Thumbs.db
 .DS_Store
 *.lnk
 
-# IDE / project settings
+# IDE and R project
 *.Rproj
 *.Rproj.user/
 *.Rhistory
 *.RData
-output/
-.idea/             # JetBrains IDE configs (ignore entire folder)
+**/output/
+**/.idea/
 
-# Hebrew-named files and folders
-HUJI/**/_HE_*
+# Hebrew-named files/folders
+**/_HE_*
+
+# Sandbox folders
+**/Sandbox/
