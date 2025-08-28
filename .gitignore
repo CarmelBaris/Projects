@@ -11,6 +11,7 @@ figure-html/       # RMD-generated figures
 *.pptx
 *.mp3
 *.mp4
+*.zip              # add: ignore exported zip archives
 
 # Data
 *.rda
@@ -27,9 +28,13 @@ Thumbs.db
 .DS_Store
 *.lnk
 
-# RStudio and R project
+# IDE / project settings
 *.Rproj
-.Rproj.user/
-.Rhistory          # RStudio settings
-.RData             # R workspace
-output/            # R-generated output
+*.Rproj.user/
+*.Rhistory
+*.RData
+output/
+.idea/             # JetBrains IDE configs (ignore entire folder)
+
+# Hebrew-named files and folders
+HUJI/**/_HE_*
