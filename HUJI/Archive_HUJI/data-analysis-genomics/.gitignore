@@ -1,0 +1,10 @@
+# Ignore huge local files
+data/*.forward
+*.rda
+*.fa
+*.csv
+*.mov
+*.heic
+*.jpg
+*.RData
+*.pdf
