@@ -30,7 +30,7 @@ library('splines')
 
 ### Paths
 ```{r paths}
-path = "~/Carmel/RProjects/Lab_Benjamini/data"
+path = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data"
 # path = "/Users/alevi/Downloads/"
 # path = "\\Users\\shawn\\Desktop\\"
 ```
@@ -352,4 +352,5 @@ is equivalent to the following conditional distribution: $\hat{𝔼}\big[ Y_K|X_
 <!-- * There is moderate noise in the data, and the estimator's performance degrades as noise increases. -->
 <!-- * Outliers and regions with significant deviations from the expected number of copies need further investigation to understand if they are due to biological variations or noise. -->
 <!-- * Fine-tuning the model parameters is essential for improving the estimator's accuracy and robustness. -->
+
 

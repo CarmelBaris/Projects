@@ -31,7 +31,7 @@ library('ggplot2')
 
 # Set working directory
 # dir_name = "/Users/alevi/Downloads/"
-dir_name = "~/Carmel/RProjects/Lab_Benjamini/data/"
+dir_name = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/"
 # dir_name = "\\Users\\shawn\\Desktop\\"
 
 # Load helper functions
@@ -469,3 +469,4 @@ ggplot() +
 
 
 ```
+

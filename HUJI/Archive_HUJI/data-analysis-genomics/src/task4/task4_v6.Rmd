@@ -46,7 +46,7 @@ rm(list = ls())
 
 
 ## ---- SET WORKING DIRECTORY
-dir_name = "~/Carmel/RProjects/Lab_Benjamini/data/"
+dir_name = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/"
 # dir_name = "/Users/alevi/Downloads/"
 # setwd(dir_name)
 # getwd() # validate
@@ -274,5 +274,6 @@ The piecewise polynomial model shows more evenly distributed residuals around ze
 The MSE and R-squared values further support that the piecewise polynomial model provides a better fit to the data compared to the linear model.
 Therefore, we conclude that choosing a quadratic piecewise polynomial model was appropriate for capturing the non-linear relationship between GC content and read counts in this dataset.
 This analysis demonstrates the importance of model selection and evaluation in regression analysis, using straightforward visual and numerical methods.
+
 
 

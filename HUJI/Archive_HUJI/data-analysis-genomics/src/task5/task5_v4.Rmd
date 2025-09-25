@@ -30,7 +30,7 @@ library('splines')
 
 # Set working directory
 # dir_name = "/Users/alevi/Downloads/"
-dir_name = "~/Carmel/RProjects/Lab_Benjamini/data/"
+dir_name = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/"
 
 # Load helper functions
 helpers_file = file.path(dir_name, "help_funcs.R")
@@ -229,6 +229,7 @@ helpers$plot_bspline(train_div3, test_div3, bspline_div3$pred_train, bspline_div
 
 
 ```
+
 
 
 

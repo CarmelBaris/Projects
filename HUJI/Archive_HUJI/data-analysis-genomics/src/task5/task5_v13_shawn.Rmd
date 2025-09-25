@@ -45,7 +45,7 @@ rm(list = ls())
 
 ## ---- SET WORKING DIRECTORY
 # dir_name = "\\Users\\shawn\\Desktop\\"
-dir_name = "~/Carmel/RProjects/Lab_Benjamini/data/"
+dir_name = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/"
 
 chr1_reads=file.path(dir_name, "TCGA-13-0723-01A_lib2_all_chr1.forward")
 
@@ -529,4 +529,5 @@ plot(test_data_div3$predicted, test_data_div3$residuals,
      xlab = "Predicted Coverage", ylab = "Residuals",
      main = "Residuals vs Predicted Coverage (Test Data)")
 ```
+
 

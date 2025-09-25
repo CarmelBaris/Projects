@@ -13,7 +13,7 @@ library('manipulate')
 library('tictoc')
 
 # Group A file
-reads_file = '~/Carmel/RProjects/Lab_Benjamini/data/TCGA-13-0723-10B_lib2_all_chr1.forward'
+reads_file = 'C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/TCGA-13-0723-10B_lib2_all_chr1.forward'
 # reads_file = "/Users/alevi/Downloads/ATCGA-13-0723-01A_lib2_all_chr1.forward/TCGA-13-0723-01A_lib2_all_chr1.forward"
 chr1_reads = fread(reads_file) 
 
@@ -104,3 +104,4 @@ The fitted normal distribution (red line) does not match the histogram well.
 The normal distribution is symmetric and bell-shaped, which does not align with the right-skewed nature of the read count distribution.
 The histogram's peak is at the beginning (near zero), while the normal distribution's peak is at the mean, leading to a poor fit.
 The normal distribution is not suitable for this data due to its right-skewed nature and the heavy concentration of low read counts.
+

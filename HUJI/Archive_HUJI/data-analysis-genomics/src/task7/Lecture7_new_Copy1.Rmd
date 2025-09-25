@@ -17,7 +17,7 @@ library('data.table')
 Read the file
 
 ```{r}
-dir_name = "~/Carmel/RProjects/Lab_Benjamini/data"
+dir_name = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data"
 # dir_name = "/Users/alevi/Downloads/"
 # dir_name = "\\Users\\shawn\\Desktop\\"
 load(sprintf("%s/reads_100_A1.rda",dir_name)) #t(umor)
@@ -192,6 +192,7 @@ abline(h=1,col=4)
 
 
 ```
+
 
 
 

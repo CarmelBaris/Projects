@@ -31,7 +31,7 @@ library('quantreg')
 
 # Set working directory
 # dir_name = "/Users/alevi/Downloads/"
-dir_name = "~/Carmel/RProjects/Lab_Benjamini/data/"
+dir_name = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/"
 
 # Load helper functions
 helpers_file = file.path(dir_name, "help_funcs_v5_1.R")
@@ -330,6 +330,7 @@ plot(GC_20K_clean, res_bs, pch = 16, cex = 0.5, col = rgb(0, 0, 0, 0.5),
 abline(h = 0, col = "darkgray", lwd = 1.5)
 
 ```
+
 
 
 

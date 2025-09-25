@@ -30,7 +30,7 @@ library('splines')
 
 ### Paths
 ```{r paths}
-path = "~/Carmel/RProjects/Lab_Benjamini/data"
+path = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data"
 # path = "/Users/alevi/Downloads/"
  # path = "\\Users\\shawn\\Desktop\\"
 ```
@@ -417,4 +417,5 @@ text(x = bar_midpoints,
 
 
 ```
+
 

@@ -291,3 +291,4 @@ manipulate(plot(x+(1:pl),reads_5K[x+(1:pl)],ylim = c(0,1000),
                 pch=20,cex =0.8), 
            x = slider(1, length(reads_5K)-pl+1,200))
 ```
+

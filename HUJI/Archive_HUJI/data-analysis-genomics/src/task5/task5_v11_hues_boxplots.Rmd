@@ -31,7 +31,7 @@ library('quantreg')
 
 # Set working directory
 # dir_name = "/Users/alevi/Downloads/"
-dir_name = "~/Carmel/RProjects/Lab_Benjamini/data/"
+dir_name = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/"
 
 # Load helper functions
 helpers_file = file.path(dir_name, "help_funcs.R")
@@ -570,6 +570,7 @@ abline(v = knots_bs, lty = 2, col = "darkgray", lwd = 1.5)
 # Add legend
 legend("topleft", legend = c("B-spline Div 1", "B-spline Div 2", "B-spline Div 3"), col = c("blue", "red", "green"), lwd = 2, cex = 0.7)
 ```
+
 
 
 

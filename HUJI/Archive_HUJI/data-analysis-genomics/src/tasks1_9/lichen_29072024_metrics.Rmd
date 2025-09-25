@@ -42,9 +42,9 @@ library('splines')
 
 ```{r paths}
 
-load("~/Carmel/RProjects/Lab_Benjamini/data/GC_100.rda")
-load("~/Carmel/RProjects/Lab_Benjamini/data/reads_100_A2.rda")
-load("~/Carmel/RProjects/Lab_Benjamini/data/reads_100_B2.rda")
+load("C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/GC_100.rda")
+load("C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/reads_100_A2.rda")
+load("C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/reads_100_B2.rda")
 
 
 short_GC_100 <- GC_100[0:2471993]
@@ -478,6 +478,7 @@ sum(predicted_0.5[predicted_0.5<(mean(predicted_0.5)-2*sd(predicted_0.5))])/leng
 sum(predicted_0.5[predicted_0.5>(mean(predicted_0.5)+2*sd(predicted_0.5))])/length(predicted_0.5)
 
 ```
+
 
 
 

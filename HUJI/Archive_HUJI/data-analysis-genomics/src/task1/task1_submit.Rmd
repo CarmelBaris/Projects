@@ -1,385 +1,773 @@
 ---
+
 title: "HW1"
+
 author: "Group 6"
+
 date: "21 May 2024"
+
 output:
+
   html_document:
+
     code_folding: show
+
   pdf_document: default
+
 editor_options:
+
   markdown:
+
     wrap: sentence
+
 ---
+
+
 
 Group: 6
 
+
+
 Group members (Name, ID, email)
 
+
+
  - Shawn Yakir , 315714980, shawnyakir@gmail.com  
+
  - Sarah Levitz, 324673623, sarah.levitz@mail.huji.ac.il
+
  - Carmel Baris, 318455276, carmel.baris@mail.huji.ac.il
+
+
+
 
 
 ### Libraries used
 
+
+
 ```{r libraries, warning=FALSE}
 
+
+
 library("tidyr")
+
 library("dplyr")
+
 library("ggplot2")
+
 library("ggrepel")
+
 ```
+
+
+
 
 
 ### Paths and Data
 
 
-```{r paths}
+
+
+
+```{r config}
 # setwd("C:/Users/alevi/Downloads")
+
 # load("chr1_str_10M_30M.rda")
-dir_name = "~/Carmel/RProjects/Lab_Benjamini"
-chr1_str_path = sprintf("%s/data/%s", dir_name, "chr1_str_10M_30M.rda")
-load(file = chr1_str_path)
-#dir_name = "C:/Users/alevi/Downloads"
-#chr1_str_path = sprintf("%s/data/%s", dir_name, "chr1_str_10M_30M.rda")
-#load(file = chr1_str_path)
+
+dir_name = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/"
 ```
+
+
+```{r paths}
+chr1_str_path = sprintf("%s/data/%s", dir_name, "chr1_str_10M_30M.rda")
+
+load(file = chr1_str_path)
+
+#dir_name = "C:/Users/alevi/Downloads"
+
+#chr1_str_path = sprintf("%s/data/%s", dir_name, "chr1_str_10M_30M.rda")
+
+#load(file = chr1_str_path)
+
+```
+
+
+
+
 
 
 
 ## Introduction 
 
+
+
 Short intro discussing the goal of this week.
+
+
 
 ## Part 1
 
+
+
 For more efficient analysis, we parse the given chromosome as a factor() object.
+
 Then we count the number of times each nucleobase appears in the data.
+
+
 
 ```{r part1, fig.width=5, fig.height=5}
 
+
+
 chr1_ls = unlist(strsplit(chr1_str_10M_30M, split = ""))
+
 chr1_vec = factor(chr1_ls, c("A","T","C","G")) #assigns int to each type
+
 N = length(chr1_vec)
+
 tb = table("count (millions)"=chr1_vec)
+
 mt = sum(is.na(chr1_vec))
+
 cat("total:", sum(tb)+mt, "\n")
+
 cat("known:", sum(tb)/N*100, "%\n")
+
 cat("unknown:", (mt)/N*100, "%\n")
+
 round(tb/1000000,2)
+
 ```
 
+
+
 Evidently, our data includes a total of 20M+1 nucleobases. \n
+
 This includes 1.25% 'unknown' bases that have failed to be determined in the DNA sequencing procedure. \n
+
 Out of the non-empty bases, A and T have about 1M more occurrences than C and G.
+
+
 
 ## Part 2
 
+
+
 The `subSnippet` function extracts a segment of nucleobases from a given chromosome vector (`chr1_vec` in our case). It takes a starting index (`start_indx`) and a size (`cell_size`, defaulting to 1K), returning the specified segment for further analysis, such as counting the occurrences of each nucleobase.
+
+
 
 ```{r part2, echo=FALSE, fig.keep='none'}
 
+
+
 subSnippet <- function(start_indx=1, cell_size=1000, chromo=chr1_vec){
+
   #' For each nucleobase, counts occurrences in region of interest.
+
   #'
+
   #' @param start_indx location of first nucleobase included in analysis
+
   #' @param cell_size number of consecutive nucleobases to be included
+
   
+
   beg_region = start_indx
+
   end_region = beg_region + cell_size - 1
+
   chr1_snippet = chr1_vec[beg_region:end_region]
+
   return(chr1_snippet)
+
 }
 
+
+
 test1 = subSnippet()
+
 table(test1)
+
 ```
 
+
+
 ## Part 3
+
+
+
 
 
 ```{r part3_data}
 
+
+
 #create vector of zeros 
+
 bin_size = 1000
+
 n_bins = ceiling(N/bin_size)
+
 A_count = numeric(N/bin_size) 
+
 T_count = numeric(N/bin_size) 
+
 G_count = numeric(N/bin_size) 
+
 C_count = numeric(N/bin_size) 
+
 NA_count = numeric(N/bin_size) 
 
+
+
 # fill vector:
+
 for (i in 1:n_bins){
+
   start_bin = 1 + (i-1)*bin_size
+
   dat = data.frame()
+
   A_count[i] = sum(subSnippet(start_indx = start_bin) == "A")
+
   T_count[i] = sum(subSnippet(start_indx = start_bin) == "T")
+
   C_count[i] = sum(subSnippet(start_indx = start_bin) == "C")
+
   G_count[i] = sum(subSnippet(start_indx = start_bin) == "G")
+
   NA_count[i] = sum(is.na(subSnippet(start_indx = start_bin)))
+
   
+
 }
 
 
+
+
+
 ```
+
+
+
 
 
 ```{r part3_config}
 
+
+
 # Graphics
+
 col1=rgb(1, 0, 0, 0.5)
+
 col2=rgb(0, 1, 0, 0.5)
+
 col3=rgb(0, 0, 1, 0.5)
+
 col4="gray"
+
 wid = 3
 
+
+
 ```
+
+
 
 To better understand the distribution of each nucleobase throughout the given chromosome, we plot the histogram and density of each one. 
 
+
+
 ```{r part3_hist, fig.width=5, fig.height=5}
 
+
+
 # Set up the plotting area in a 2x2 grid
+
 par(mfrow = c(2, 2))
 
+
+
 #create histograms
+
 p1 = hist(A_count,col=col1)
+
 p2 = hist(T_count,col=col2)
+
 p3 = hist(C_count,col=col3)
+
 p4 = hist(G_count,col=col4)
 
+
+
 ```
+
+
+
 
 
 As seen in class, the nucleobases pairs (A,T) and (C,G) behave similarly. \n 
 
+
+
 In each pair, not only are their counts alike, but they are also similarly distributed. \n
+
+
 
 By overlapping their density plots, this similarity is more evident. \n
 
+
+
 ```{r part3_density, fig.width=5, fig.height=5}
+
 # create vector of zeros
+
 bin_size = 1000
+
 n_bins = ceiling(N/bin_size)
+
 bin_indices = 1:n_bins
 
+
+
 # create empty data frame to store counts
+
 counts_df = data.frame(bin_index = bin_indices,
+
                        A_count = numeric(n_bins),
+
                        T_count = numeric(n_bins),
+
                        C_count = numeric(n_bins),
+
                        G_count = numeric(n_bins))
 
+
+
 # fill counts in the data frame
+
 for (i in bin_indices){
+
   start_bin = 1 + (i-1)*bin_size
+
   counts_df$A_count[i] = sum(subSnippet(start_indx = start_bin) == "A")
+
   counts_df$T_count[i] = sum(subSnippet(start_indx = start_bin) == "T")
+
   counts_df$C_count[i] = sum(subSnippet(start_indx = start_bin) == "C")
+
   counts_df$G_count[i] = sum(subSnippet(start_indx = start_bin) == "G")
+
 }
 
+
+
 # Get the maximum density value across all nucleotide counts
+
 max_density <- max(c(density(counts_df$A_count, na.rm = T)$y,
+
                      density(counts_df$T_count, na.rm = T)$y,
+
                      density(counts_df$C_count, na.rm = T)$y,
+
                      density(counts_df$G_count, na.rm = T)$y), na.rm = T)
 
+
+
 # Create a layout with space for the legend
+
 layout(matrix(c(1,1,2,1), 2, 2, byrow = TRUE), heights = c(4,1))
+
 par(mar = c(5, 4, 4, 2) + 0.1)
 
 
+
+
+
 # Set the y-axis limits
+
 yylim <- c(0, max_density * 1.1)
+
 xxlim <- range(c(counts_df$A_count, counts_df$T_count, counts_df$C_count, counts_df$G_count), na.rm = T)
 
+
+
 # Plot the density curves
+
 plot(density(counts_df$A_count, na.rm = T),
+
      main = "Nucleobase Counts", xlab = "Count", ylab = "Density",
+
      col = col1, lwd = wid, 
+
      xlim = xxlim, ylim = yylim)
 
+
+
 lines(density(counts_df$T_count, na.rm = T), col = col2, lwd = wid)
+
 lines(density(counts_df$C_count, na.rm = T), col = col3, lwd = wid)
+
 lines(density(counts_df$G_count, na.rm = T), col = col4, lwd = wid)
 
+
+
 # Add legend
+
 lgnd = legend("topleft", legend = c("A", "T", "C", "G"),
+
        col = c(col1, col2, col3, col4), lwd = wid,
+
        lty = 1, bty = "n")
+
+
 
 ```
 
+
+
 It is true that these pairs are known to correlate in the double-helix form. \n
 
+
+
 Yet this observation is non-trivial in our case, since our data was collected by sequencing a **single** DNA strand. \n
+
+
 
 This finding may indicate a certain correlation between the nucleobases, even within the same DNA strand.
 
 
+
+
+
 ## Part 3
+
 d. Base Frequencies
+
 ```{r Base_Frequencies}
+
 # removing all "N" values from string
+
 chr1_single <- chr1_ls[chr1_ls != "N"]
 
+
+
 # convert to data frame without 'N' values
+
 chr1_df <- data.frame(
+
   position = 1:length(chr1_single),
+
   base = chr1_single
+
 )
 
+
+
 # define window size 1 million bases
+
 window_size <- 1e6
+
 chr1_df$window <- ceiling(chr1_df$position / window_size)
 
+
+
 # calculate each base frequencies for each window
+
 base_frequencies <- chr1_df %>%
+
   group_by(window, base) %>%
+
   summarise(count = n()) %>%
+
   ungroup() %>%
+
   mutate(frequency = count / window_size)
 
+
+
 # line graph with frequencies of each base
+
 ggplot(base_frequencies, aes(x = window, y = frequency, color = base, group = base)) +
+
   geom_line() +
+
   labs(title = "Base Frequencies Across Chromosome",
+
        x = "Window (1M bases each)",
+
        y = "Frequency",
+
        color = "Base") +
+
   theme_minimal()
 
+
+
 ```
+
+
+
 
 
 The graph shows the frequencies of four nucleotide bases (A, C, G, T) across different chromosome areas. Bases C (green) and G (cyan) have very similar lines, almost identical, with only minor differences, indicating a strong correlation in their distribution. Bases A (red) and T (purple) also show similar trends, but they have more noticeable differences in their frequencies, suggesting a moderate correlation. In summary, C and G are highly similar, while A and T are somewhat similar but with more variation.
 
+
+
 ## Part 4
+
+
 
 e. Pair Frequencies
 
+
+
 ```{r Pair_frequencies}
+
 # Calculate counts for each base in bins
+
 N <- length(chr1_single)
+
 bin_size <- 2000 # Adjust bin size if necessary
+
 n_bins <- ceiling(N / bin_size)
 
+
+
 # Set the unique bases
+
 unique_bases <- unique(chr1_single)
 
+
+
 # Starting with creating a dataframe that counts each base
+
 base_counts <- data.frame(
+
   bin = rep(1:n_bins, each = length(unique_bases)),
+
   base = rep(unique_bases, times = n_bins),
+
   count = numeric(length(unique_bases) * n_bins)
+
 )
+
+
 
 # Adding the count of each base to the dataframe, for loop that goes over each bin and then loops through each base and sums the number of occurrences
+
 for (i in 1:n_bins) {
+
   start_bin <- 1 + (i - 1) * bin_size
+
   end_bin <- min(i * bin_size, N)
+
   bin_data <- chr1_single[start_bin:end_bin]
+
   for (base in unique_bases) {
+
     base_counts$count[base_counts$bin == i & base_counts$base == base] <- sum(bin_data == base)
+
   }
+
 }
+
+
 
 # Convert bin number to actual bin positions for plotting
+
 base_counts$bin_position <- base_counts$bin * bin_size
 
+
+
 # Add frequency calculation and column to base_counts dataframe 
+
 base_counts <- base_counts %>%
+
   group_by(bin, base) %>%
+
   mutate(frequency = count / bin_size) %>%
+
   ungroup()
+
+
 
 # Create another dataframe for pair frequencies of each combination of bases
+
 pair_frequencies <- expand.grid(
+
   bin = 1:n_bins,
+
   base1 = unique_bases,
+
   base2 = unique_bases,
+
   stringsAsFactors = FALSE
+
 )
 
+
+
 # Filter out duplicate pairs (for example keep (A, T) but not (T, A))
+
 pair_frequencies <- pair_frequencies %>%
+
   filter(base1 < base2)
 
+
+
 pair_frequencies <- pair_frequencies %>%
+
   rowwise() %>%
+
   mutate(
+
     freq1 = base_counts$frequency[base_counts$bin == bin & base_counts$base == base1],
+
     freq2 = base_counts$frequency[base_counts$bin == bin & base_counts$base == base2],
+
     bin_position = base_counts$bin_position[base_counts$bin == bin & base_counts$base == base1]
+
   ) %>%
+
   ungroup()
 
+
+
 # Function to identify outliers
+
 is_outlier <- function(x, threshold = 5) {
+
   return(abs(x - mean(x)) > threshold * sd(x))
+
 }
+
+
 
 # Function to dynamically adjust label positions
+
 adjust_label_position <- function(df) {
+
   df <- df %>%
+
     mutate(hjust_val = ifelse(freq1 > mean(freq1), -0.2, 1.2),
+
            vjust_val = ifelse(freq2 > mean(freq2), -0.5, 1.2))
+
   return(df)
+
 }
 
+
+
 # Create scatter plots for each unique pair with outliers highlighted
+
 unique_pairs <- unique(pair_frequencies %>% select(base1, base2))
 
 
+
+
+
 for (i in 1:nrow(unique_pairs)) {
+
   base1 <- unique_pairs$base1[i]
+
   base2 <- unique_pairs$base2[i]
+
   
+
   plot_data <- pair_frequencies %>% filter(base1 == !!base1 & base2 == !!base2)
+
   
+
   # Identify outliers with a stricter threshold (e.g., 4 standard deviations)
+
   plot_data <- plot_data %>%
+
     mutate(outlier = is_outlier(freq1, threshold = 5) | is_outlier(freq2, threshold = 5)) %>%
+
     adjust_label_position()
+
   
+
   plot_title <- paste("Scatter Plot of", base1, "vs", base2, "Frequencies")
+
   
+
   p <- ggplot(plot_data, aes(x = freq1, y = freq2, color = outlier)) +
+
     geom_point(alpha = 0.3) +
+
     geom_text_repel(data = subset(plot_data, outlier == TRUE), 
+
                     aes(label = bin_position), 
+
                     size = 3, color = "red", fill = "white", box.padding = 0.35, 
+
                     point.padding = 0.5, segment.color = 'grey50') +
+
     scale_color_manual(values = c("FALSE" = "blue", "TRUE" = "red")) +
+
     labs(title = plot_title, x = paste(base1, "Frequency"), y = paste(base2, "Frequency")) +
+
     theme_minimal() +
+
     theme(plot.title = element_text(hjust = 0.5), 
+
           plot.margin = unit(c(2, 2, 2, 2), "cm"))
+
   
+
   print(p)
+
 }
 
 
+
+
+
 ```
+
+
+
 
 
 a. The scatter plot of C vs G frequencies shows that the frequencies of C and G are fairly similar. This indicates a strong correlation between these two bases. The scatter plot of A vs T frequencies also shows a significant correlation, although not as strong as that between C and G. This suggests that A and T bases frequently occur together. All of the other pairs seem to have different frequencies when compared to each other.
+
 b. On the scatter plot we can see all of the outliers, they are marked in red. The outliers are calculated based on the mean and standard deviation of a dataset and marking data points that are more than a 5 standard deviations away from the mean.
+
 c. We can see on the scatter plot the actual locations of the outliers on the chromosome. \n
+
 It seems that the outliers are more prevalent at either side of the given chromosome snippet. This makes sense because that's the location of the empty values. If a nucleobase has not been recognized, its pair might look as if there is an imbalance, as seen in the scatter plots. \n
+
 Note that on the left side, this aligns with what we know about the structure of the chromosome. Our snippet is relatively at the beginning of the chromosome i.e. closer to the telomer. Meaning the empty values occur most in places where that the sequencing struggled more.
 
+
+
 ```{r}
+
 hist(NA_count)
+
 ```
 
 
+
+
+
 f. Base Pairs
+
 Based on the research above, we can categorize the bases into two pairs: C with G and T with A. This observation is evident in the distribution histogram, frequency graphs, and scatter plot. In the frequency graphs, the lines representing these pairs behave similarly, same in the distribution histogram. Additionally, the scatter plots reinforce this finding. For the C-G pair, the scatter plot shows a strong correlation, indicating that these bases appear together frequently. Although the scatter plot for the A-T pair also shows a correlation, it is not as pronounced as that for the C-G pair.
+
+
+
 
 
 ## Short summary
 
+
+
 It is clear from the data that we have two pairs of bases, in all cases C-G is a stronger pair then A-T. It will be interesting to further research the chromosome based on this understanding. 
+
+

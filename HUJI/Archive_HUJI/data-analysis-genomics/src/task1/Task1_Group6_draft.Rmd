@@ -18,7 +18,7 @@ editor_options:
 ## group A gets bases 10M to 30M from chromosome1
 
 ## step 1: update directory, do NOT end with slash '/'
-dir_name = "~/Carmel/RProjects/Lab_Benjamini"
+dir_name = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics"
 # setwd(dir_name) #set current directory to path of RDA file
 # print(getwd()) #verify change of directory
 
@@ -287,3 +287,4 @@ n_bins = nrow(let_count)
 plot(let_count[2:n_bins,1],let_count[1:n_bins-1,1])
 
 ```
+

@@ -34,7 +34,7 @@ rm(list = ls())
 
 
 ## ---- SET WORKING DIRECTORY
-dir_name = "~/Carmel/RProjects/Lab_Benjamini/data/"
+dir_name = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/"
 # dir_name = "/Users/alevi/Downloads/"
 # setwd(dir_name)
 # getwd() # validate
@@ -334,6 +334,7 @@ Then
 
 and is an estimator for 
 \[\beta_1 = \frac{Cov(GC, Coverage)}{Var(GC)}.\]
+
 
 
 

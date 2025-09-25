@@ -18,7 +18,7 @@ editor_options:
 ## group A gets bases 10M to 30M from chromosome1
 
 ## step 1: update directory, do NOT end with slash '/'
-dir_name = "~/Carmel/RProjects/Lab_Benjamini/data"
+dir_name = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data"
 # setwd(dir_name) #set current directory to path of RDA file
 # print(getwd()) #verify change of directory
 
@@ -79,5 +79,6 @@ head(chr1_snippet, 100)
 cat("\n", "Total nucleobases in scope:", sum(counts), "\n\n") #like cell size
 print(counts)
 ```
+
 
 

@@ -50,7 +50,7 @@ library('splines')
 
 ### Paths
 ```{r paths}
-path = "~/Carmel/RProjects/Lab_Benjamini/data"
+path = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data"
 # path = "/Users/alevi/Downloads/"
  # path = "\\Users\\shawn\\Desktop\\"
 ```
@@ -602,3 +602,4 @@ sum(predicted_0.5[predicted_0.5>(mean(predicted_0.5)+2*sd(predicted_0.5))])/leng
 ```
 
 Something you've learned. 
+

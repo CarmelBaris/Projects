@@ -15,8 +15,8 @@ output: html_document
 
 ```{r}
 # reads_file = '/Users/yuvalbenjamini/Library/CloudStorage/Dropbox/Courses/Lab/Lab_52568_16/DNAseq/Data/TCGA-13-0723-10B_lib2_all_chr1.forward'
-reads_file = '~/Carmel/RProjects/Lab_Benjamini/data/TCGA-13-0723-10B_lib2_all_chr1.forward'
-# reads_file = '~/Carmel/RProjects/Lab_Benjamini/data/TCGA-13-0723-01A_lib2_all_chr1.forward'
+reads_file = 'C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/TCGA-13-0723-10B_lib2_all_chr1.forward'
+# reads_file = 'C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/TCGA-13-0723-01A_lib2_all_chr1.forward'
 
 chr1_reads = fread(reads_file) 
 colnames(chr1_reads) = c("Chrom","Loc","FragLen") 
@@ -130,3 +130,4 @@ pois_probs = dpois(0:660,m_no_outliers)
 # What does this model imply for the probability of being between X_i in 100:109?
 sd(reads_5K[no_outlier],na.rm=TRUE)
 ```
+

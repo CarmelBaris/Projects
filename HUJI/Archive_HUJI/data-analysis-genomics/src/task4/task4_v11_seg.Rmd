@@ -45,7 +45,7 @@ rm(list = ls())
 
 
 ## ---- SET WORKING DIRECTORY
-dir_name = "~/Carmel/RProjects/Lab_Benjamini/data/"
+dir_name = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/"
 # dir_name = "/Users/alevi/Downloads/"
 # setwd(dir_name)
 # getwd() # validate
@@ -366,4 +366,5 @@ GC_20K_test = GC_20K_clean[-train_index]
 Based on the visual comparison of residuals and numerical comparison metrics:
 
 The model using the `segmented` package shows more evenly distributed residuals around zero, indicating a potentially better fit than the linear or the quadratic models. The MSPE, MSE and R-squared metrics further support this indication.
+
 

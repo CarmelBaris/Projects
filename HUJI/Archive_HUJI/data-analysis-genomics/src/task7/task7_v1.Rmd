@@ -30,7 +30,7 @@ library('splines')
 
 ### Paths
 ```{r paths}
-dir_name = "~/Carmel/RProjects/Lab_Benjamini/data/"
+dir_name = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/"
 #dir_name = "/Users/alevi/Downloads/"
 #dir_name = "\\Users\\shawn\\Desktop\\"
 ```
@@ -47,7 +47,7 @@ helpers = list(loadRData = loadRData, binReads = binReads)
 ### Data
 ```{r dat}
 # Create data file
-# source("~/Carmel/RProjects/Lab_Benjamini/data/data_prep.R", echo=TRUE)
+# source("C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/data_prep.R", echo=TRUE)
 
 load(sprintf("%s/reads_100_A1.rda",path))
 load(sprintf("%s/reads_100_B1.rda",path))
@@ -198,4 +198,5 @@ print(round(est_v,2))
 * There is moderate noise in the data, and the estimator's performance degrades as noise increases.
 * Outliers and regions with significant deviations from the expected number of copies need further investigation to understand if they are due to biological variations or noise.
 * Fine-tuning the model parameters is essential for improving the estimator's accuracy and robustness.
+
 

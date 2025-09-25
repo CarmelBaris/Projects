@@ -30,7 +30,7 @@ Let's prepare the GC file:
 ## ------------------------------------------------
 ## ---- CLEAN ENVIRONMENT & SET WORKING DIRECTORY
 rm(list = ls())
-dir_name = "~/Carmel/RProjects/Lab_Benjamini/data/"
+dir_name = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/"
 # dir_name = "/Users/alevi/Downloads/"
 # setwd(dir_name)
 # getwd() # validate
@@ -424,3 +424,4 @@ Then
 $$ \text{It thus follows that: } \ b_1 = \frac{cov(gc, coverage)}{var(gc)}$$
 
 $$\text{is an estimator for } \ \beta_1 = \frac{Cov(GC, Coverage)}{Var(GC)}.$$
+

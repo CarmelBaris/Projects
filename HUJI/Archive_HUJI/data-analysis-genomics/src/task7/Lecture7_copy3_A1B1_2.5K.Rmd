@@ -18,7 +18,7 @@ editor_options:
 ```{r paths}
 # path = "/Users/alevi/Downloads/"
 # path = "\\Users\\shawn\\Desktop\\"
-path = "~/Carmel/RProjects/Lab_Benjamini/data"
+path = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data"
 ```
 
 ### Load data
@@ -241,3 +241,4 @@ $$
 \\
 \hat{a}_k^{(\#3)} = \frac{}{\frac{{Y_k}^n}{{\hat{f}_k}^n{GC}_k}+\mathcal{E}}
 $$
+

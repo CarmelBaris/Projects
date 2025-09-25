@@ -28,7 +28,7 @@ library('splines')
 
 # Set working directory
 # dir_name = "/Users/alevi/Downloads/"
-dir_name = "~/Carmel/RProjects/Lab_Benjamini/data/"
+dir_name = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/"
 # dir_name = "\\Users\\shawn\\Desktop\\"
 
 # Load helper functions
@@ -546,5 +546,6 @@ Best for Test Data: Division 3 performs the best for test data, indicating the b
 Overall: Division 3 is recommended as it provides a good balance, achieving better generalization to unseen data, which is crucial for practical applications.
 
 ## QUESTION 3: 
+
 
 

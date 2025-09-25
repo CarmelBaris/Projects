@@ -43,7 +43,7 @@ rm(list = ls())
 
 
 ## ---- SET WORKING DIRECTORY
-dir_name = "~/Carmel/RProjects/Lab_Benjamini/data/"
+dir_name = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/"
 # dir_name = "/Users/alevi/Downloads/"
 # setwd(dir_name)
 # getwd() # validate
@@ -310,4 +310,5 @@ The segmented model provides a better fit to the data compared to the linear mod
 1. Lower standard deviations in residuals across most quantiles. \n
 2. A more consistent spread of residuals across the range of GC content. \n
 These results suggest that the segmented model improves the prediction quality by more accurately capturing the underlying relationship between GC content and read counts, particularly in regions with higher GC content where the linear model struggles.
+
 

@@ -18,7 +18,7 @@ library('dplyr')
 Load data...
 ```{r}
 
-reads_file = '~/Carmel/RProjects/Lab_Benjamini/data/TCGA-13-0723-01A_lib2_all_chr1.forward'
+reads_file = 'C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/TCGA-13-0723-01A_lib2_all_chr1.forward'
 chr1_reads_orig = fread(reads_file) 
 colnames(chr1_reads_orig) = c("Chrom","Loc","FragLen")   
 source("help_funcs.R")
@@ -211,5 +211,6 @@ pois_probs = dpois(0:660,m_no_outliers)
 # What does this model imply for the probability of being between X_i in 100:109?
 sd(reads_5K[no_outlier],na.rm=TRUE)
 ```
+
 
 

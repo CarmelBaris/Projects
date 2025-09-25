@@ -34,7 +34,7 @@ library('tictoc')
 
 ```{r data_A, message=FALSE, warning=FALSE}
 
-reads_file = '~/Carmel/RProjects/Lab_Benjamini/data/TCGA-13-0723-01A_lib2_all_chr1.forward'
+reads_file = 'C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/TCGA-13-0723-01A_lib2_all_chr1.forward'
 # reads_file = "/Users/alevi/Downloads/ATCGA-13-0723-01A_lib2_all_chr1.forward/TCGA-13-0723-01A_lib2_all_chr1.forward"
 
 chr1_reads = fread(reads_file) 
@@ -325,3 +325,4 @@ The normal distribution is not suitable for this data due to its right-skewed na
 ## Short summary
 
 It is clear from the data that we have two pairs of bases, in all cases C-G is a stronger pair then A-T. It will be interesting to further research the chromosome based on this understanding. 
+

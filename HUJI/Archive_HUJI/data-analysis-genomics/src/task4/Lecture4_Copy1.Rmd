@@ -17,7 +17,7 @@ Let's prepare the GC file:
 ## ------------------------------------------------
 ## ---- CLEAN ENVIRONMENT & SET WORKING DIRECTORY
 rm(list = ls())
-dir_name = "~/Carmel/RProjects/Lab_Benjamini/data/"
+dir_name = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/"
 # dir_name = "/Users/alevi/Downloads/"
 # setwd(dir_name)
 # getwd() # validate
@@ -90,7 +90,7 @@ format(object.size(reads_5K),units = "MB")
 So you can easily share them across computers.
 
 ```{r, eval = FALSE}
-dir_name = "~/Carmel/RProjects/Lab_Benjamini/data/"
+dir_name = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/"
 save(reads_5K, GC_5K,
      file = file.path(dir_path=dir_name,"reads_gc_5K.rda"))
 
@@ -499,3 +499,4 @@ lines(x, x^2*(x< -2)/5, col = 2)
 ```
 
 Region regression can be run on each region separately, though it makes it a bit harder to get residuals. 
+

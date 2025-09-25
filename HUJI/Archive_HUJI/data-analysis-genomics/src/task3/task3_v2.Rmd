@@ -35,7 +35,7 @@ source("help_funcs.R")
 
 
 # Load the data (Group A)
-reads_file = '~/Carmel/RProjects/Lab_Benjamini/data/TCGA-13-0723-01A_lib2_all_chr1.forward'
+reads_file = 'C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/TCGA-13-0723-01A_lib2_all_chr1.forward'
 # reads_file = "/Users/alevi/Downloads/ATCGA-13-0723-01A_lib2_all_chr1.forward/TCGA-13-0723-01A_lib2_all_chr1.forward"
 
 chr1_reads = fread(reads_file) 
@@ -282,3 +282,4 @@ print(chisq_test)
 ## Short summary
 
 Based on our analysis of the data, it seems that the reads are not distributed normally or uniformly.
+

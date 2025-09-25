@@ -14,3 +14,4 @@ subSnippet <- function(start_indx=1, cell_size=1000){
   return(list(occurrences_table = table(chr1_snippet),
               chr1_snippet = chr1_snippet))
 }
+

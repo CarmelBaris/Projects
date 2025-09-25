@@ -26,7 +26,7 @@ rm(list = ls())
 
 
 ## ---- SET WORKING DIRECTORY
-dir_name = "~/Carmel/RProjects/Lab_Benjamini/data/"
+dir_name = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/"
 # dir_name = "/Users/alevi/Downloads/"
 # setwd(dir_name)
 # getwd() # validate
@@ -462,6 +462,7 @@ lines(x, x^2*(x< -2)/5, col = 2)
 ```
 
 Region regression can be run on each region separately, though it makes it a bit harder to get residuals. 
+
 
 
 

@@ -37,7 +37,7 @@ library("ggrepel")
 ```{r paths, message=FALSE}
 # setwd("C:/Users/alevi/Downloads")
 # load("chr1_str_10M_30M.rda")
-dir_name = "~/Carmel/RProjects/Lab_Benjamini"
+dir_name = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics"
 chr1_str_path = sprintf("%s/data/%s", dir_name, "chr1_str_10M_30M.rda")
 load(file = chr1_str_path)
 #dir_name = "C:/Users/alevi/Downloads"
@@ -381,3 +381,4 @@ Based on the research above, we can categorize the bases into two pairs: C with 
 ## Short summary
 
 It is clear from the data that we have two pairs of bases, in all cases C-G is a stronger pair then A-T. It will be interesting to further research the chromosome based on this understanding. 
+

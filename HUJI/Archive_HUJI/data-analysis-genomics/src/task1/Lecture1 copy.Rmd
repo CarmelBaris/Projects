@@ -14,7 +14,7 @@ The following
 
 ```{r}
 ######## CHANGE THESE FILENAMES
-dir_name = "~/Carmel/RProjects/Lab_Benjamini"
+dir_name = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics"
 str22_file = sprintf("%s/data/%s", dir_name, "chr1_str_10M_30M.rda")
 load(file = str22_file)
 
@@ -207,3 +207,4 @@ n_bins = nrow(let_count)
 plot(let_count[2:n_bins,1],let_count[1:n_bins-1,1])
 
 ```
+

@@ -6,7 +6,7 @@ output: html_document
 ---
 
 ```{r}
-path = "~/Carmel/RProjects/Lab_Benjamini/data"
+path = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data"
 load(sprintf("%s/reads_100_A1.rda",path))
 load(sprintf("%s/reads_100_B1.rda",path))
 load(sprintf("%s/reads_100_A2.rda",path))
@@ -311,3 +311,4 @@ abline(h=1,col=4)
 
 
 If Y is small and f is small, the effect of adding an epsilon will move it to 1.
+

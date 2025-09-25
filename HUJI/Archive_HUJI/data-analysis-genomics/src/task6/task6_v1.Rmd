@@ -31,7 +31,7 @@ library('splines')
 
 ### Paths
 ```{r paths}
-dir_name = "~/Carmel/RProjects/Lab_Benjamini/data/"
+dir_name = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/"
 #dir_name = "/Users/alevi/Downloads/"
 #dir_name = "\\Users\\shawn\\Desktop\\"
 ```
@@ -48,7 +48,7 @@ helpers = list(loadRData = loadRData)
 ### Data
 ```{r dat}
 # Create data file
-# source("~/Carmel/RProjects/Lab_Benjamini/data/data_prep.R", echo=TRUE)
+# source("C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/data_prep.R", echo=TRUE)
 
 # Load data file
 reads_file_20K = file.path(dir_name, "reads_gc_20K_cln.rda")
@@ -166,5 +166,6 @@ head(est_v)
 ```
 
 ## Conclusion
+
 
 

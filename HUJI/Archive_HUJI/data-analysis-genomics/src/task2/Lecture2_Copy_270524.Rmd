@@ -25,10 +25,10 @@ editor_options:
 ```{r}
 
 # Original file
-# reads_file = '~/Carmel/RProjects/Lab_Benjamini/data/TCGA-13-0723-01A_lib2_all_chr1.forward'
+# reads_file = 'C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/TCGA-13-0723-01A_lib2_all_chr1.forward'
 
 # Group A file
-reads_file = '~/Carmel/RProjects/Lab_Benjamini/data/TCGA-13-0723-10B_lib2_all_chr1.forward'
+reads_file = 'C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/TCGA-13-0723-10B_lib2_all_chr1.forward'
 
 
 # fread is a more efficient function for reading large tables from files
@@ -325,3 +325,4 @@ manipulate(
   x = slider(1, length(reads_10K) - pl + 1, initial = 200)
 )
 ```
+

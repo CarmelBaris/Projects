@@ -215,3 +215,4 @@ $$
 \\
 \hat{a}_k^{(\#3)} = \frac{}{\frac{{Y_k}^n}{{\hat{f}_k}^n{GC}_k}+\mathcal{E}}
 $$
+

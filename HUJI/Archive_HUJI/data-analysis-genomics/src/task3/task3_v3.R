@@ -4,7 +4,7 @@ library('tidyr')
 library('dplyr')
 library('tictoc')
 
-reads_file = '~/Carmel/RProjects/Lab_Benjamini/data/TCGA-13-0723-01A_lib2_all_chr1.forward'
+reads_file = 'C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/TCGA-13-0723-01A_lib2_all_chr1.forward'
 chr1_reads = fread(reads_file) 
 colnames(chr1_reads) = c("Chrom","Loc","FragLen")
 
@@ -84,3 +84,4 @@ ggplot(comparison_df_long, aes(x = Count, y = Value, fill = Type)) +
        x = "Read Counts") +
   theme_minimal() +
   scale_y_continuous(labels = format_values)
+

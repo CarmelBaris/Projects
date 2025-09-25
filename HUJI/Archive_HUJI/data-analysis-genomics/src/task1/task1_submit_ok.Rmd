@@ -33,7 +33,7 @@ library("tidyr")
 
 
 ```{r paths}
-dir_name = "~/Carmel/RProjects/Lab_Benjamini"
+dir_name = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics"
 chr1_str_path = sprintf("%s/data/%s", dir_name, "chr1_str_10M_30M.rda")
 load(file = chr1_str_path)
 ```
@@ -193,3 +193,4 @@ plot(p4,col=rgb(0,0,1,0.25),add=T)
 ## Short summary
 
 Something you've learned. 
+

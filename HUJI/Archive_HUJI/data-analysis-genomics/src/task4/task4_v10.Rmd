@@ -31,7 +31,7 @@ library(segmented)
 rm(list = ls())
 
 ## ---- SET WORKING DIRECTORY
-dir_name = "~/Carmel/RProjects/Lab_Benjamini/data/"
+dir_name = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/"
 
 ## ---- LOAD HELPER FUNCTIONS
 helpers_file = file.path(dir_name, "help_funcs.R")
@@ -269,4 +269,5 @@ print(metrics_comparison)
 Based on the visual comparison of residuals and numerical comparison metrics:
 
 The model using the `segmented` package shows more evenly distributed residuals around zero, indicating a potentially better fit than the linear or the quadratic models. The MSPE, MSE and R-squared metrics further support this indication.
+
 

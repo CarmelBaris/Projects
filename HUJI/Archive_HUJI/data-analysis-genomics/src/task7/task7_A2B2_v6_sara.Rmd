@@ -31,7 +31,7 @@ library('scales')
 
 ### Paths
 ```{r paths}
-#path = "~/Carmel/RProjects/Lab_Benjamini/data"
+#path = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data"
 path = "/Users/alevi/Downloads/"
 # path = "\\Users\\shawn\\Desktop\\"
 ```
@@ -307,5 +307,6 @@ Shape of the Regression Lines: Both samples exhibit a similar unimodal relations
 Magnitude of Read Counts: The tumor sample generally has higher read counts compared to the healthy sample across the GC content range. This indicates that while the pattern is similar, the extent to which GC content affects read counts differs between the two samples.
 
 The connection is the same in terms of the pattern of the relationship, but the magnitude of the effect differs between the healthy and tumor samples.
+
 
 

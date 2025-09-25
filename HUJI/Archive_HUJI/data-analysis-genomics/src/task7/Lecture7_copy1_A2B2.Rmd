@@ -13,7 +13,7 @@ library('data.table')
 ```{r paths}
 # path = "/Users/alevi/Downloads/"
 # path = "\\Users\\shawn\\Desktop\\"
-path = "~/Carmel/RProjects/Lab_Benjamini/data"
+path = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data"
 ```
 
 ### Load data
@@ -132,3 +132,4 @@ plot(uncorrected_2n[range_a],
 abline(h=1,col=4)
 
 ```
+

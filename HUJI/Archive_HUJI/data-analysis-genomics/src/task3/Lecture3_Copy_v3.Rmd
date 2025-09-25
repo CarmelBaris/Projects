@@ -20,13 +20,13 @@ library('dplyr')
 Load data...
 ```{r paths}
 
-helpers = '~/Carmel/RProjects/Lab_Benjamini/task3/help_funcs.R'
+helpers = 'C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/task3/help_funcs.R'
 source(helpers)
 
 # Benjamini:
-# reads_file = '~/Carmel/RProjects/Lab_Benjamini/data/TCGA-13-0723-10B_lib2_all_chr1.forward'
+# reads_file = 'C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/TCGA-13-0723-10B_lib2_all_chr1.forward'
 # Group A:
-reads_file = '~/Carmel/RProjects/Lab_Benjamini/data/TCGA-13-0723-01A_lib2_all_chr1.forward'
+reads_file = 'C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/TCGA-13-0723-01A_lib2_all_chr1.forward'
 
 chr1_reads_orig = fread(reads_file) 
 colnames(chr1_reads_orig) = c("Chrom","Loc","FragLen")   
@@ -128,5 +128,6 @@ pois_probs = dpois(0:660,mean(reads_20K))
 sd(reads_20K,na.rm=TRUE)
 
 ```
+
 
 

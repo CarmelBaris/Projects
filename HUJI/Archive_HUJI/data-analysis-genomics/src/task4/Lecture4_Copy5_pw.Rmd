@@ -143,3 +143,4 @@ lines(x, x^2*(x< -2)/5, col = 2)
 ```
 
 Region regression can be run on each region separately, though it makes it a bit harder to get residuals. 
+

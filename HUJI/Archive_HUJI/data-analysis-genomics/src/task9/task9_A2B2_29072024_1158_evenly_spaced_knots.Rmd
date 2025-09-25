@@ -30,7 +30,7 @@ library('splines')
 
 ### Paths
 ```{r paths}
-path = "~/Carmel/RProjects/Lab_Benjamini/data"
+path = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data"
 # path = "/Users/alevi/Downloads/"
 # path = "\\Users\\shawn\\Desktop\\"
 ```
@@ -438,6 +438,7 @@ cat("Median No. of Fragments Per Bin (Healthy): ", median(reads_healthy), "\n")
 cat("Mean No. of Fragments Per Bin (Healthy): ", mean(reads_healthy), "\n")
 
 ```
+
 
 
 

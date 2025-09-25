@@ -316,3 +316,4 @@ lines(draw_line$x,predict(lm_3b,draw_line),lwd=2,col='blue')
 
 ```
 
+

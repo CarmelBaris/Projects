@@ -32,7 +32,7 @@ library('caret')
 
 ### Paths
 ```{r paths}
-path = "~/Carmel/RProjects/Lab_Benjamini/data"
+path = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data"
 # path = "/Users/alevi/Downloads/"
  # path = "\\Users\\shawn\\Desktop\\"
 ```
@@ -626,3 +626,4 @@ ggplot2::ggplot(data.frame(x = GC, y = r_health_cln, predictions = predictions_h
   theme_minimal()
 
 ```
+

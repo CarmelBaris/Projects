@@ -31,7 +31,7 @@ library('scales')
 
 ### Paths
 ```{r paths}
-path = "~/Carmel/RProjects/Lab_Benjamini/data"
+path = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data"
 # path = "/Users/alevi/Downloads/"
  # path = "\\Users\\shawn\\Desktop\\"
 ```
@@ -511,6 +511,7 @@ abline(v=c(1000,1200,4000),col=c(5,5,6), lt=c(1,1,2), lwd = 1.2)
 
 plot(1)
 ```
+
 
 
 

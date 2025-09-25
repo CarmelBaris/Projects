@@ -18,7 +18,7 @@ editor_options:
 ```{r paths}
 # path = "/Users/alevi/Downloads/"
 # path = "\\Users\\shawn\\Desktop\\"
-path = "~/Carmel/RProjects/Lab_Benjamini/data"
+path = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data"
 ```
 
 ### Load data
@@ -200,4 +200,5 @@ cat(" Binned")
 head(reads_5K_t1, 10)
 summary(reads_5K_t1)
 ```
+
 

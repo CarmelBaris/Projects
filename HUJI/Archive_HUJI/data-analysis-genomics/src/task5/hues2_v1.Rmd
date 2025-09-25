@@ -24,7 +24,7 @@ library('quantreg')
 ## Loading helper functions
 ```{r helpers}
 # Set working directory
-dir_name = "~/Carmel/RProjects/Lab_Benjamini/data/"
+dir_name = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/"
 
 # Load helper functions
 helpers_file = file.path(dir_name, "help_funcs_v5.R")
@@ -226,3 +226,4 @@ legend("bottomright", legend = c("Fewer", "More"),
 4. **Visualization**: Comprehensive visualizations were created to inspect the distribution and residuals of the fitted model, aiding in model diagnostics and understanding of data behavior.
 
 In this analysis, we successfully applied a piecewise polynomial model to approximate the relationship between GC content and read counts, providing insights and highlighting areas for further improvement.
+

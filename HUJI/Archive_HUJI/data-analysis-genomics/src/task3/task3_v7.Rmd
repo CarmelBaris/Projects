@@ -19,7 +19,7 @@ num_cells <- region_size / cell_size
 ```{r setup, include=FALSE}
 ### READS DATA
 # Load the data (Group A)
-reads_file = '~/Carmel/RProjects/Lab_Benjamini/data/TCGA-13-0723-01A_lib2_all_chr1.forward'
+reads_file = 'C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data/TCGA-13-0723-01A_lib2_all_chr1.forward'
 
 # reads_file = "/Users/alevi/Downloads/ATCGA-13-0723-01A_lib2_all_chr1.forward/TCGA-13-0723-01A_lib2_all_chr1.forward"
 
@@ -32,7 +32,7 @@ colnames(chr1_reads) = c("Chrom","Loc","FragLen")
 
 ### BASES DATA
 # dir_name = "/Users/alevi/Downloads/"
-dir_name = "~/Carmel/RProjects/Lab_Benjamini/data"
+dir_name = "C:/Users/user/Documents/Carmel/Projects/HUJI/Archive_HUJI/data-analysis-genomics/data"
 str22_file = sprintf("%s/%s", dir_name, "chr1_line.rda")
 load(str22_file) # chr1_line
 
@@ -194,3 +194,4 @@ print(chisq_test)
 
 ```
  
+
