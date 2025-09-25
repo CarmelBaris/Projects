@@ -30,3 +30,6 @@ Thumbs.db binary
 output/**      binary
 figure-html/** binary
 data/**        binary
+* text=auto
+*.R text=auto
+*.Rmd text=auto
