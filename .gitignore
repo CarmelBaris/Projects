@@ -38,3 +38,8 @@ Thumbs.db
 # Sandbox folders
 **/Sandbox/
 .Rproj.user
+HUJI/Active_HUJI/
+HUJI/Admin_HUJI/
+HUJI/Archive_HUJI/calculus/
+HUJI/Archive_HUJI/linear-algebra/
+HUJI/Archive_HUJI/prob-01/
